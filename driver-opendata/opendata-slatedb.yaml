@@ -1,0 +1,27 @@
+# OpenData Log - SlateDB Persistent Storage Configuration
+#
+# Template for benchmarking with persistent storage.
+# Uncomment and fill in the S3 settings for cloud-backed storage.
+
+name: OpenData-SlateDB
+driverClass: io.openmessaging.benchmark.driver.opendata.OpendataBenchmarkDriver
+
+storage:
+  type: slatedb
+  path: /tmp/opendata-benchmark
+
+  # Object store backend: "local" or "s3"
+  objectStore: local
+
+  # S3 configuration (uncomment for S3-backed storage)
+  # objectStore: s3
+  # s3Bucket: your-bucket-name
+  # s3Region: us-west-2
+
+  # SlateDB settings file (optional)
+  # settingsPath: driver-config/slatedb-settings.toml
+
+consumer:
+  pollIntervalMs: 10
+  pollBatchSize: 1000
+  queueCapacity: 10000

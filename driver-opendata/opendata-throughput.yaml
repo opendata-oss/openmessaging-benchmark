@@ -1,0 +1,15 @@
+# OpenData Log - Throughput-optimized Configuration
+#
+# Tuned for high throughput benchmarks. Trades latency for higher message rates.
+
+name: OpenData-Throughput
+driverClass: io.openmessaging.benchmark.driver.opendata.OpendataBenchmarkDriver
+
+storage:
+  type: in-memory
+
+consumer:
+  # Larger batches, less frequent polling for throughput
+  pollIntervalMs: 50
+  pollBatchSize: 5000
+  queueCapacity: 50000

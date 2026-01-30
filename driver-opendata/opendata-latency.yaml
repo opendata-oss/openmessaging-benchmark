@@ -1,0 +1,15 @@
+# OpenData Log - Latency-optimized Configuration
+#
+# Tuned for low latency benchmarks. Trades throughput for faster response times.
+
+name: OpenData-Latency
+driverClass: io.openmessaging.benchmark.driver.opendata.OpendataBenchmarkDriver
+
+storage:
+  type: in-memory
+
+consumer:
+  # Aggressive polling for low latency
+  pollIntervalMs: 1
+  pollBatchSize: 100
+  queueCapacity: 1000

@@ -1,0 +1,4 @@
+# SlateDB settings
+#
+# See https://docs.rs/slatedb/latest/slatedb/config/ for available options.
+# Leave empty to use defaults.

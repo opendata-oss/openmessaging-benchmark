@@ -1,0 +1,48 @@
+# OpenData Log OMB Driver Configuration
+#
+# This file configures the OpenData driver for the OpenMessaging Benchmark framework.
+# See: https://github.com/opendata-oss/opendata/issues/130
+
+name: OpenData
+driverClass: io.openmessaging.benchmark.driver.opendata.OpendataBenchmarkDriver
+
+# Storage backend configuration
+storage:
+  # Storage type: "in-memory" or "slatedb"
+  # - in-memory: Fast, no persistence (good for testing)
+  # - slatedb: Persistent storage with object store backend
+  type: in-memory
+
+  # Path for SlateDB data (ignored for in-memory)
+  path: /tmp/opendata-benchmark
+
+  # Object store type for SlateDB: "in-memory", "local", or "s3"
+  objectStore: local
+
+  # S3 configuration (only used when objectStore is "s3")
+  # s3Bucket: my-benchmark-bucket
+  # s3Region: us-west-2
+
+# Producer configuration
+producer:
+  # Reserved for future batching options:
+  # batchingEnabled: false
+  # batchingMaxMessages: 1000
+  # lingerMs: 1
+
+# Consumer configuration
+consumer:
+  # Interval between polls when no data is available (ms)
+  # Lower values reduce latency but increase CPU usage
+  # Default: 10
+  pollIntervalMs: 10
+
+  # Maximum entries to read per poll
+  # Higher values improve throughput, lower values reduce memory
+  # Default: 1000
+  pollBatchSize: 1000
+
+  # Internal queue capacity between pollers and dispatcher
+  # Provides backpressure when consumer callback is slow
+  # Default: 10000
+  queueCapacity: 10000
