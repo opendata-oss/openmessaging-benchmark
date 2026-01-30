@@ -19,7 +19,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import lombok.Value;
 import org.apache.bookkeeper.stats.StatsLogger;
 
 /** Base driver interface. */
@@ -63,7 +62,7 @@ public interface BenchmarkDriver extends AutoCloseable {
         @SuppressWarnings("unchecked")
         CompletableFuture<Void>[] futures =
                 topicInfos.stream()
-                        .map(topicInfo -> createTopic(topicInfo.getTopic(), topicInfo.getPartitions()))
+                        .map(topicInfo -> createTopic(topicInfo.topic(), topicInfo.partitions()))
                         .toArray(CompletableFuture[]::new);
         return CompletableFuture.allOf(futures);
     }
@@ -84,7 +83,7 @@ public interface BenchmarkDriver extends AutoCloseable {
      */
     default CompletableFuture<List<BenchmarkProducer>> createProducers(List<ProducerInfo> producers) {
         List<CompletableFuture<BenchmarkProducer>> futures =
-                producers.stream().map(ci -> createProducer(ci.getTopic())).collect(toList());
+                producers.stream().map(ci -> createProducer(ci.topic())).collect(toList());
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .thenApply(v -> futures.stream().map(CompletableFuture::join).collect(toList()));
     }
@@ -115,29 +114,27 @@ public interface BenchmarkDriver extends AutoCloseable {
                         .map(
                                 ci ->
                                         createConsumer(
-                                                ci.getTopic(), ci.getSubscriptionName(), ci.getConsumerCallback()))
+                                                ci.topic(), ci.subscriptionName(), ci.consumerCallback()))
                         .collect(toList());
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .thenApply(v -> futures.stream().map(CompletableFuture::join).collect(toList()));
     }
 
-    @Value
-    class TopicInfo {
-        String topic;
-        int partitions;
+    record TopicInfo(String topic, int partitions) {
+        // Compatibility getters for existing drivers using Lombok-style names
+        public String getTopic() { return topic; }
+        public int getPartitions() { return partitions; }
     }
 
-    @Value
-    class ProducerInfo {
-        int id;
-        String topic;
+    record ProducerInfo(int id, String topic) {
+        public int getId() { return id; }
+        public String getTopic() { return topic; }
     }
 
-    @Value
-    class ConsumerInfo {
-        int id;
-        String topic;
-        String subscriptionName;
-        ConsumerCallback consumerCallback;
+    record ConsumerInfo(int id, String topic, String subscriptionName, ConsumerCallback consumerCallback) {
+        public int getId() { return id; }
+        public String getTopic() { return topic; }
+        public String getSubscriptionName() { return subscriptionName; }
+        public ConsumerCallback getConsumerCallback() { return consumerCallback; }
     }
 }

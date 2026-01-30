@@ -27,20 +27,28 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Slf4j
-@RequiredArgsConstructor
 public class ResourceCreator<R, C> {
+    private static final Logger log = LoggerFactory.getLogger(ResourceCreator.class);
+
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
     private final String name;
     private final int maxBatchSize;
     private final long interBatchDelayMs;
     private final Function<List<R>, Map<R, CompletableFuture<C>>> invokeBatchFn;
     private final Function<CompletableFuture<C>, CreationResult<C>> complete;
+
+    public ResourceCreator(String name, int maxBatchSize, long interBatchDelayMs,
+                           Function<List<R>, Map<R, CompletableFuture<C>>> invokeBatchFn,
+                           Function<CompletableFuture<C>, CreationResult<C>> complete) {
+        this.name = name;
+        this.maxBatchSize = maxBatchSize;
+        this.interBatchDelayMs = interBatchDelayMs;
+        this.invokeBatchFn = invokeBatchFn;
+        this.complete = complete;
+    }
 
     public CompletableFuture<List<C>> create(List<R> resources) {
         return CompletableFuture.completedFuture(createBlocking(resources));
@@ -83,17 +91,17 @@ public class ResourceCreator<R, C> {
         return created;
     }
 
-    @SneakyThrows
     private Map<R, CreationResult<C>> executeBatch(List<R> batch) {
         log.debug("Executing batch, size: {}", batch.size());
-        Thread.sleep(interBatchDelayMs);
+        try {
+            Thread.sleep(interBatchDelayMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
         return invokeBatchFn.apply(batch).entrySet().stream()
                 .collect(toMap(Map.Entry::getKey, e -> complete.apply(e.getValue())));
     }
 
-    @Value
-    public static class CreationResult<C> {
-        C created;
-        boolean success;
-    }
+    public record CreationResult<C>(C created, boolean success) {}
 }

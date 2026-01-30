@@ -113,7 +113,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
         benchmarkDriver.createTopics(topicInfos).join();
 
-        List<String> topics = topicInfos.stream().map(TopicInfo::getTopic).collect(toList());
+        List<String> topics = topicInfos.stream().map(TopicInfo::topic).collect(toList());
 
         log.info("Created {} topics in {} ms", topics.size(), timer.elapsedMillis());
         return topics;

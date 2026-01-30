@@ -30,16 +30,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Slf4j
-@RequiredArgsConstructor
 class KafkaTopicCreator {
+    private static final Logger log = LoggerFactory.getLogger(KafkaTopicCreator.class);
     private static final int MAX_BATCH_SIZE = 500;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
     private final AdminClient admin;
@@ -49,6 +48,13 @@ class KafkaTopicCreator {
 
     KafkaTopicCreator(AdminClient admin, Map<String, String> topicConfigs, short replicationFactor) {
         this(admin, topicConfigs, replicationFactor, MAX_BATCH_SIZE);
+    }
+
+    KafkaTopicCreator(AdminClient admin, Map<String, String> topicConfigs, short replicationFactor, int maxBatchSize) {
+        this.admin = admin;
+        this.topicConfigs = topicConfigs;
+        this.replicationFactor = replicationFactor;
+        this.maxBatchSize = maxBatchSize;
     }
 
     CompletableFuture<Void> create(List<TopicInfo> topicInfos) {

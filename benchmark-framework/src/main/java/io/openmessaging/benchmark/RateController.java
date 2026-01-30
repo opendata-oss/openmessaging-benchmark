@@ -14,22 +14,24 @@
 package io.openmessaging.benchmark;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static lombok.AccessLevel.PACKAGE;
 
 import io.openmessaging.benchmark.utils.Env;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Slf4j
 class RateController {
+    private static final Logger log = LoggerFactory.getLogger(RateController.class);
     private static final long ONE_SECOND_IN_NANOS = SECONDS.toNanos(1);
     private final long publishBacklogLimit;
     private final long receiveBacklogLimit;
     private final double minRampingFactor;
     private final double maxRampingFactor;
 
-    @Getter(PACKAGE)
     private double rampingFactor;
+
+    double getRampingFactor() {
+        return rampingFactor;
+    }
 
     private long previousTotalPublished = 0;
     private long previousTotalReceived = 0;
