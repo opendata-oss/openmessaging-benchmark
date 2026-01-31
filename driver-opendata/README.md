@@ -6,12 +6,12 @@ This module provides an OpenMessaging Benchmark driver for [OpenData Log](https:
 
 The driver maps OMB concepts to OpenData Log operations:
 
-| OMB Concept | OpenData Mapping |
-|-------------|------------------|
-| Topic | Log key prefix |
-| Partition | Key suffix (`{topic}/0`, `{topic}/1`, ...) |
-| Producer | `Log.append()` with partition routing |
-| Consumer | `LogReader` with polling |
+| OMB Concept |              OpenData Mapping              |
+|-------------|--------------------------------------------|
+| Topic       | Log key prefix                             |
+| Partition   | Key suffix (`{topic}/0`, `{topic}/1`, ...) |
+| Producer    | `Log.append()` with partition routing      |
+| Consumer    | `LogReader` with polling                   |
 
 ## Prerequisites
 
@@ -57,18 +57,18 @@ consumer:
 
 ### Storage Options
 
-| Type | Description |
-|------|-------------|
+|    Type     |            Description             |
+|-------------|------------------------------------|
 | `in-memory` | Fast, non-persistent (for testing) |
-| `slatedb` | Persistent storage via SlateDB |
+| `slatedb`   | Persistent storage via SlateDB     |
 
 ### Object Store Options (for SlateDB)
 
-| Type | Description |
-|------|-------------|
+|    Type     |      Description       |
+|-------------|------------------------|
 | `in-memory` | In-memory object store |
-| `local` | Local filesystem |
-| `s3` | Amazon S3 |
+| `local`     | Local filesystem       |
+| `s3`        | Amazon S3              |
 
 ## Running a Benchmark
 
@@ -125,3 +125,4 @@ l0_sst_size_bytes = 4194304  # 4MB
 
 - [opendata-java](https://github.com/opendata-oss/opendata-java) - Java bindings library
 - [OpenData](https://github.com/opendata-oss/opendata) - Upstream Rust implementation
+

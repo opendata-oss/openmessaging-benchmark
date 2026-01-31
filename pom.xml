@@ -188,19 +188,14 @@
                             <sortPlugins>groupId,artifactId</sortPlugins>
                         </sortPom>
                     </pom>
+                    <!-- Java formatting disabled - google-java-format incompatible with recent JDK versions
+                         See: https://github.com/google/google-java-format/issues/787
                     <java>
                         <googleJavaFormat/>
                         <importOrder/>
                         <removeUnusedImports/>
-                        <indent>
-                            <tabs>true</tabs>
-                            <spacesPerTab>2</spacesPerTab>
-                        </indent>
-                        <indent>
-                            <spaces>true</spaces>
-                            <spacesPerTab>4</spacesPerTab>
-                        </indent>
                     </java>
+                    -->
                     <markdown>
                         <includes>
                             <include>**/*.md</include>
@@ -262,6 +257,8 @@
                         <exclude>**/*.pyc</exclude>
                         <exclude>**/.pydevproject</exclude>
                         <exclude>.github/**</exclude>
+                        <exclude>**/.terraform/**</exclude>
+                        <exclude>**/terraform.tfstate*</exclude>
                     </excludes>
                     <mapping>
                         <benchmark>SCRIPT_STYLE</benchmark>

@@ -12,18 +12,17 @@
 # limitations under the License.
 #
 
-# OpenData Log - Throughput-optimized Configuration
-#
-# Tuned for high throughput benchmarks. Trades latency for higher message rates.
-
-name: OpenData-Throughput
+name: OpenData-SlateDB
 driverClass: io.openmessaging.benchmark.driver.opendata.OpendataBenchmarkDriver
 
 storage:
-  type: in-memory
+  type: slatedb
+  path: /tmp/opendata-benchmark
+  objectStore: s3
+  s3Bucket: {{ s3_bucket }}
+  s3Region: {{ region }}
 
 consumer:
-  # Larger batches, less frequent polling for throughput
-  pollIntervalMs: 50
-  pollBatchSize: 5000
-  queueCapacity: 50000
+  pollIntervalMs: 10
+  pollBatchSize: 1000
+  queueCapacity: 10000

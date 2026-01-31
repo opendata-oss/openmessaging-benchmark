@@ -15,7 +15,6 @@ package io.openmessaging.benchmark.driver.opendata;
 
 import dev.opendata.Log;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
-
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;

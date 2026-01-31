@@ -18,7 +18,6 @@ import dev.opendata.LogEntry;
 import dev.opendata.LogReader;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
-
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;

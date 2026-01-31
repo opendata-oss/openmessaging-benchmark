@@ -1,0 +1,217 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+- name: OpenData Benchmark Setup
+  hosts: client
+  connection: ssh
+  become: true
+  vars:
+    java_version: "17"
+    rust_version: "stable"
+    opendata_repo: "https://github.com/opendata-oss/opendata.git"
+    opendata_java_repo: "https://github.com/opendata-oss/opendata-java.git"
+    benchmark_repo: "https://github.com/opendata-oss/openmessaging-benchmark.git"
+    # s3_bucket and aws_region must be passed via -e (see README)
+  tasks:
+    # System setup
+    - name: Update system packages
+      yum:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Install base packages
+      yum:
+        name:
+          - git
+          - gcc
+          - gcc-c++
+          - make
+          - openssl-devel
+          - wget
+          - vim
+          - htop
+          - sysstat
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    # Java installation
+    - name: Install Amazon Corretto 17
+      yum:
+        name: java-17-amazon-corretto-devel
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Set JAVA_HOME
+      lineinfile:
+        path: /etc/environment
+        line: 'JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto'
+        create: yes
+
+    # Maven installation
+    - name: Download Maven
+      get_url:
+        url: https://archive.apache.org/dist/maven/maven-3/3.9.6/binaries/apache-maven-3.9.6-bin.tar.gz
+        dest: /tmp/maven.tar.gz
+
+    - name: Extract Maven
+      unarchive:
+        src: /tmp/maven.tar.gz
+        dest: /opt
+        remote_src: yes
+        creates: /opt/apache-maven-3.9.6
+
+    - name: Create Maven symlink
+      file:
+        src: /opt/apache-maven-3.9.6
+        dest: /opt/maven
+        state: link
+
+    - name: Add Maven to PATH
+      lineinfile:
+        path: /etc/environment
+        line: 'PATH=/opt/maven/bin:{{ ansible_env.PATH }}'
+        regexp: '^PATH='
+        create: yes
+
+    # Rust installation
+    - name: Check if Rust is installed
+      stat:
+        path: /root/.cargo/bin/rustc
+      register: rust_installed
+
+    - name: Download Rustup
+      get_url:
+        url: https://sh.rustup.rs
+        dest: /tmp/rustup.sh
+        mode: '0755'
+      when: not rust_installed.stat.exists
+
+    - name: Install Rust
+      shell: /tmp/rustup.sh -y --default-toolchain {{ rust_version }}
+      args:
+        creates: /root/.cargo/bin/rustc
+      when: not rust_installed.stat.exists
+
+    - name: Add Cargo to PATH for all users
+      lineinfile:
+        path: /etc/profile.d/cargo.sh
+        line: 'export PATH="$PATH:/root/.cargo/bin"'
+        create: yes
+        mode: '0644'
+
+    # Clone repositories
+    - name: Clone opendata repository
+      git:
+        repo: "{{ opendata_repo }}"
+        dest: /opt/opendata
+        version: expose-compactor-knobs
+        force: yes
+
+    - name: Clone opendata-java repository
+      git:
+        repo: "{{ opendata_java_repo }}"
+        dest: /opt/opendata-java
+        version: main
+        force: yes
+
+    - name: Clone benchmark repository
+      git:
+        repo: "{{ benchmark_repo }}"
+        dest: /opt/benchmark-src
+        version: master
+        force: yes
+
+    # Build opendata-java native library
+    - name: Build opendata-java native library
+      shell: |
+        source /root/.cargo/env
+        cd /opt/opendata-java/log/native
+        cargo build --release
+      args:
+        executable: /bin/bash
+        creates: /opt/opendata-java/log/native/target/release/libopendata_log_jni.so
+
+    # Build opendata-java Maven artifacts
+    - name: Build and install opendata-java
+      shell: |
+        export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto
+        export PATH=/opt/maven/bin:$PATH
+        cd /opt/opendata-java
+        mvn clean install -DskipTests
+      args:
+        executable: /bin/bash
+
+    # Build benchmark
+    - name: Build benchmark
+      shell: |
+        export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto
+        export PATH=/opt/maven/bin:$PATH
+        cd /opt/benchmark-src
+        mvn clean install -pl driver-opendata,package -am -DskipTests -Dcheckstyle.skip=true -Dspotless.check.skip=true -Dlicense.skip=true -Dspotbugs.skip=true
+      args:
+        executable: /bin/bash
+
+    - name: Create benchmark directory
+      file:
+        path: /opt/benchmark
+        state: directory
+
+    - name: Extract benchmark package
+      unarchive:
+        src: /opt/benchmark-src/package/target/openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar.gz
+        dest: /opt/benchmark
+        remote_src: yes
+        extra_opts: ["--strip-components=1"]
+
+    # Set up native library path
+    - name: Create ld.so.conf.d entry for native library
+      copy:
+        content: "/opt/opendata-java/log/native/target/release"
+        dest: /etc/ld.so.conf.d/opendata.conf
+
+    - name: Update ldconfig
+      command: ldconfig
+
+    # Remove workers.yaml to use LocalWorker mode
+    - name: Remove workers.yaml for local mode
+      file:
+        path: /opt/benchmark/workers.yaml
+        state: absent
+
+    # Set JVM_OPTS for native library path
+    - name: Configure JVM_OPTS for native library
+      copy:
+        content: 'export JVM_OPTS="-Djava.library.path=/opt/opendata-java/log/native/target/release"'
+        dest: /etc/profile.d/opendata-jvm.sh
+        mode: '0644'
+
+    # Generate driver config from template
+    - name: Generate OpenData driver config
+      template:
+        src: templates/driver-opendata.yaml
+        dest: /opt/benchmark/driver-opendata.yaml
+
+- name: Display connection info
+  hosts: client
+  connection: ssh
+  tasks:
+    - name: Show benchmark info
+      debug:
+        msg: |
+          Benchmark client ready!
+          SSH: ssh ec2-user@{{ inventory_hostname }}
+          Run benchmark:
+            cd /opt/benchmark
+            sudo -E bin/benchmark --drivers driver-opendata.yaml workloads/1-topic-1-partition-1kb.yaml
