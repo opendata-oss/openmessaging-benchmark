@@ -83,6 +83,11 @@
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>driver-opendata</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>driver-pravega</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -109,11 +114,6 @@
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>driver-rocketmq5</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>driver-opendata</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

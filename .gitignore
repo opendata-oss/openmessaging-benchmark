@@ -15,6 +15,7 @@ core/*.json
 **/terraform.tfstate
 **/terraform.tfstate.backup
 **/*.lock.info
+**/hosts.ini
 .DS_Store
 .factorypath
 

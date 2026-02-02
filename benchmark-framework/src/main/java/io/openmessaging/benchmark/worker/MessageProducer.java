@@ -53,9 +53,19 @@ public class MessageProducer {
         stats.recordProducerSuccess(payloadLength, intendedSendTime, sendTime, nowNs);
     }
 
+    // TODO: Revert to original failure handling once opendata driver is stable
+    //       Original behavior: log warning and continue (don't exit)
     private Void failure(Throwable t) {
         stats.recordProducerFailure();
-        log.warn("Write error on message", t);
+        log.error("=== PRODUCER FAILURE - EXITING ===");
+        log.error("Exception type: {}", t.getClass().getName());
+        log.error("Exception message: {}", t.getMessage());
+        if (t.getCause() != null) {
+            log.error("Cause type: {}", t.getCause().getClass().getName());
+            log.error("Cause message: {}", t.getCause().getMessage());
+        }
+        log.error("Full stack trace:", t);
+        System.exit(1);
         return null;
     }
 
