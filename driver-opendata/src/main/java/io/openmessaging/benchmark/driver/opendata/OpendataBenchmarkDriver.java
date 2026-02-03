@@ -13,8 +13,10 @@
  */
 package io.openmessaging.benchmark.driver.opendata;
 
-import dev.opendata.Log;
-import dev.opendata.StorageType;
+import dev.opendata.LogDb;
+import dev.opendata.LogDbConfig;
+import dev.opendata.common.ObjectStoreConfig;
+import dev.opendata.common.StorageConfig;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -41,7 +43,7 @@ import org.apache.bookkeeper.stats.StatsLogger;
  */
 public class OpendataBenchmarkDriver implements BenchmarkDriver {
 
-    private Log log;
+    private LogDb log;
     private OpendataConfig config;
 
     /** Tracks partition count per topic for producer/consumer creation. */
@@ -51,18 +53,30 @@ public class OpendataBenchmarkDriver implements BenchmarkDriver {
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         this.config = OpendataConfig.load(configurationFile);
 
-        // Map config storage type to StorageType
-        StorageType storageType = "slatedb".equalsIgnoreCase(config.storage.type)
-                ? StorageType.SLATEDB
-                : StorageType.IN_MEMORY;
+        StorageConfig storageConfig = buildStorageConfig(config.storage);
+        LogDbConfig logDbConfig = new LogDbConfig(storageConfig);
+        this.log = LogDb.open(logDbConfig);
+    }
 
-        this.log = Log.open(
-                storageType,
-                config.storage.path,
-                config.storage.objectStore,
-                config.storage.s3Bucket,
-                config.storage.s3Region,
-                config.storage.settingsPath);
+    private StorageConfig buildStorageConfig(OpendataConfig.StorageConfig storage) {
+        if ("in-memory".equalsIgnoreCase(storage.type)) {
+            return new StorageConfig.InMemory();
+        }
+
+        // SlateDB storage
+        ObjectStoreConfig objectStoreConfig = buildObjectStoreConfig(storage);
+        return new StorageConfig.SlateDb(storage.path, objectStoreConfig, storage.settingsPath);
+    }
+
+    private ObjectStoreConfig buildObjectStoreConfig(OpendataConfig.StorageConfig storage) {
+        if ("in-memory".equalsIgnoreCase(storage.objectStore)) {
+            return new ObjectStoreConfig.InMemory();
+        } else if ("s3".equalsIgnoreCase(storage.objectStore)) {
+            return new ObjectStoreConfig.Aws(storage.s3Region, storage.s3Bucket);
+        } else {
+            // Default to local
+            return new ObjectStoreConfig.Local(storage.path);
+        }
     }
 
     @Override

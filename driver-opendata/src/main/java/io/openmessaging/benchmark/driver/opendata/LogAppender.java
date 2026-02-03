@@ -14,7 +14,7 @@
 package io.openmessaging.benchmark.driver.opendata;
 
 import dev.opendata.AppendResult;
-import dev.opendata.Log;
+import dev.opendata.LogDb;
 import dev.opendata.Record;
 
 /**
@@ -34,12 +34,12 @@ public interface LogAppender {
     AppendResult append(Record[] records);
 
     /**
-     * Creates a LogAppender that delegates to the given Log instance.
+     * Creates a LogAppender that delegates to the given LogDb instance.
      *
-     * @param log the Log instance
-     * @return a LogAppender wrapping the Log
+     * @param log the LogDb instance
+     * @return a LogAppender wrapping the LogDb
      */
-    static LogAppender wrap(Log log) {
+    static LogAppender wrap(LogDb log) {
         return log::append;
     }
 }

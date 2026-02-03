@@ -13,7 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.opendata;
 
-import dev.opendata.Log;
+import dev.opendata.LogDb;
 import dev.opendata.LogEntry;
 import dev.opendata.LogReader;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
@@ -71,27 +71,27 @@ public class OpendataBenchmarkConsumer implements BenchmarkConsumer {
     /**
      * Creates a consumer for a single partition with default config.
      */
-    public OpendataBenchmarkConsumer(Log log, String topic, ConsumerCallback callback) {
+    public OpendataBenchmarkConsumer(LogDb log, String topic, ConsumerCallback callback) {
         this(log, topic, 1, null, callback);
     }
 
     /**
      * Creates a consumer for multiple partitions with default config.
      */
-    public OpendataBenchmarkConsumer(Log log, String topic, int numPartitions, ConsumerCallback callback) {
+    public OpendataBenchmarkConsumer(LogDb log, String topic, int numPartitions, ConsumerCallback callback) {
         this(log, topic, numPartitions, null, callback);
     }
 
     /**
      * Creates a consumer for multiple partitions with custom config.
      *
-     * @param log           the Log instance
+     * @param log           the LogDb instance
      * @param topic         the topic name (prefix for partition-keys)
      * @param numPartitions number of partitions to consume from
      * @param config        consumer configuration (nullable, uses defaults if null)
      * @param callback      the OMB callback for received messages
      */
-    public OpendataBenchmarkConsumer(Log log, String topic, int numPartitions,
+    public OpendataBenchmarkConsumer(LogDb log, String topic, int numPartitions,
                             OpendataConfig.ConsumerConfig config, ConsumerCallback callback) {
         // Apply configuration or defaults
         this.pollBatchSize = config != null ? config.pollBatchSize : DEFAULT_POLL_BATCH_SIZE;

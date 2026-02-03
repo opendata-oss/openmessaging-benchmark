@@ -13,7 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.opendata;
 
-import dev.opendata.Log;
+import dev.opendata.LogDb;
 import dev.opendata.Record;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import java.nio.charset.StandardCharsets;
@@ -75,21 +75,21 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
     /**
      * Creates a producer for a single partition.
      *
-     * @param log   the Log instance
+     * @param log   the LogDb instance
      * @param topic the topic name (used as the Log key)
      */
-    public OpendataBenchmarkProducer(Log log, String topic) {
+    public OpendataBenchmarkProducer(LogDb log, String topic) {
         this(LogAppender.wrap(log), topic, 1);
     }
 
     /**
      * Creates a producer with multiple partitions.
      *
-     * @param log           the Log instance
+     * @param log           the LogDb instance
      * @param topic         the topic name (prefix for partition-keys)
      * @param numPartitions number of partitions to distribute messages across
      */
-    public OpendataBenchmarkProducer(Log log, String topic, int numPartitions) {
+    public OpendataBenchmarkProducer(LogDb log, String topic, int numPartitions) {
         this(LogAppender.wrap(log), topic, numPartitions);
     }
 
