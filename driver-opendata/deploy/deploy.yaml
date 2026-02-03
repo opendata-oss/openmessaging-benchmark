@@ -141,7 +141,6 @@
         cargo build --release
       args:
         executable: /bin/bash
-        creates: /opt/opendata-java/log/native/target/release/libopendata_log_jni.so
 
     # Build opendata-java Maven artifacts
     - name: Build and install opendata-java
