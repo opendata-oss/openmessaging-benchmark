@@ -47,6 +47,24 @@ variable "instance_type" {
   default     = "m5n.xlarge"
 }
 
+# Optional: Use existing VPC/subnet instead of creating new ones
+# Useful when deploying into a subnet with an S3 gateway endpoint
+variable "existing_vpc_id" {
+  description = "ID of existing VPC to deploy into (optional - if not set, creates new VPC)"
+  default     = null
+}
+
+variable "existing_subnet_id" {
+  description = "ID of existing subnet to deploy into (optional - if not set, creates new subnet)"
+  default     = null
+}
+
+locals {
+  use_existing_vpc = var.existing_vpc_id != null && var.existing_subnet_id != null
+  vpc_id           = local.use_existing_vpc ? var.existing_vpc_id : aws_vpc.benchmark_vpc[0].id
+  subnet_id        = local.use_existing_vpc ? var.existing_subnet_id : aws_subnet.benchmark_subnet[0].id
+}
+
 variable "num_instances" {
   description = "Number of benchmark client instances"
   default     = 1
@@ -56,8 +74,9 @@ resource "random_id" "hash" {
   byte_length = 8
 }
 
-# VPC
+# VPC (only created if not using existing infrastructure)
 resource "aws_vpc" "benchmark_vpc" {
+  count                = local.use_existing_vpc ? 0 : 1
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -67,25 +86,28 @@ resource "aws_vpc" "benchmark_vpc" {
   }
 }
 
-# Internet gateway
+# Internet gateway (only created if not using existing infrastructure)
 resource "aws_internet_gateway" "benchmark_gw" {
-  vpc_id = aws_vpc.benchmark_vpc.id
+  count  = local.use_existing_vpc ? 0 : 1
+  vpc_id = aws_vpc.benchmark_vpc[0].id
 
   tags = {
     Name = "OpenData_Benchmark_GW_${random_id.hash.hex}"
   }
 }
 
-# Route table
+# Route table (only created if not using existing infrastructure)
 resource "aws_route" "internet_access" {
-  route_table_id         = aws_vpc.benchmark_vpc.main_route_table_id
+  count                  = local.use_existing_vpc ? 0 : 1
+  route_table_id         = aws_vpc.benchmark_vpc[0].main_route_table_id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.benchmark_gw.id
+  gateway_id             = aws_internet_gateway.benchmark_gw[0].id
 }
 
-# Subnet
+# Subnet (only created if not using existing infrastructure)
 resource "aws_subnet" "benchmark_subnet" {
-  vpc_id                  = aws_vpc.benchmark_vpc.id
+  count                   = local.use_existing_vpc ? 0 : 1
+  vpc_id                  = aws_vpc.benchmark_vpc[0].id
   cidr_block              = "10.0.0.0/24"
   map_public_ip_on_launch = true
   availability_zone       = var.az
@@ -98,7 +120,7 @@ resource "aws_subnet" "benchmark_subnet" {
 # Security group
 resource "aws_security_group" "benchmark_security_group" {
   name   = "opendata-benchmark-${random_id.hash.hex}"
-  vpc_id = aws_vpc.benchmark_vpc.id
+  vpc_id = local.vpc_id
 
   # SSH access
   ingress {
@@ -205,7 +227,7 @@ resource "aws_instance" "client" {
   ami                    = var.ami
   instance_type          = var.instance_type
   key_name               = aws_key_pair.auth.id
-  subnet_id              = aws_subnet.benchmark_subnet.id
+  subnet_id              = local.subnet_id
   vpc_security_group_ids = [aws_security_group.benchmark_security_group.id]
   iam_instance_profile   = aws_iam_instance_profile.benchmark_profile.name
   count                  = var.num_instances
@@ -235,4 +257,16 @@ output "s3_bucket" {
 
 output "region" {
   value = var.region
+}
+
+output "vpc_id" {
+  value = local.vpc_id
+}
+
+output "subnet_id" {
+  value = local.subnet_id
+}
+
+output "using_existing_vpc" {
+  value = local.use_existing_vpc
 }

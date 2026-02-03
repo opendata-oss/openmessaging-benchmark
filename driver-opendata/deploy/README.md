@@ -32,6 +32,21 @@ az              = "us-west-2a"
 s3_bucket       = "your-bucket-name"
 ```
 
+### Using an Existing VPC with S3 Gateway (Optional)
+
+For better S3 performance and reduced data transfer costs, you can deploy into an existing subnet that has an S3 VPC Gateway Endpoint configured:
+
+```hcl
+public_key_path    = "~/.ssh/opendata_aws.pub"
+region             = "us-west-2"
+az                 = "us-west-2a"
+s3_bucket          = "your-bucket-name"
+existing_vpc_id    = "vpc-0123456789abcdef0"
+existing_subnet_id = "subnet-0123456789abcdef0"
+```
+
+When these variables are set, Terraform skips creating networking resources (VPC, subnet, internet gateway) and deploys directly into your existing infrastructure.
+
 ## Deploy
 
 ```bash
