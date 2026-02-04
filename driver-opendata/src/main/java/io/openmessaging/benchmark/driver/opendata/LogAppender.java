@@ -22,7 +22,6 @@ import dev.opendata.Record;
  *
  * <p>This abstraction allows the producer to be tested without loading the native library.
  */
-@FunctionalInterface
 public interface LogAppender {
 
     /**
@@ -34,12 +33,31 @@ public interface LogAppender {
     AppendResult append(Record[] records);
 
     /**
+     * Flushes buffered data to durable storage.
+     *
+     * <p>Default implementation is a no-op for testing with mocks.
+     */
+    default void flush() {
+        // Default no-op
+    }
+
+    /**
      * Creates a LogAppender that delegates to the given LogDb instance.
      *
      * @param log the LogDb instance
      * @return a LogAppender wrapping the LogDb
      */
     static LogAppender wrap(LogDb log) {
-        return log::append;
+        return new LogAppender() {
+            @Override
+            public AppendResult append(Record[] records) {
+                return log.append(records);
+            }
+
+            @Override
+            public void flush() {
+                log.flush();
+            }
+        };
     }
 }

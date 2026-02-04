@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>NO_KEY messages are round-robined across partitions</li>
  * </ul>
  */
-public class OpendataBenchmarkProducer implements BenchmarkProducer {
+public class OpenDataBenchmarkProducer implements BenchmarkProducer {
 
     /** Maximum records per batch. */
     private static final int MAX_BATCH_SIZE = 1000;
@@ -55,14 +55,17 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
     private final int numPartitions;
     private final AtomicLong roundRobinCounter = new AtomicLong(0);
 
-    private final BlockingQueue<PendingWrite> writeQueue;
+    private final BlockingQueue<QueueItem> writeQueue;
     private final Thread writerThread;
     private volatile boolean closed = false;
+
+    /** Sealed interface for type-safe queue operations. */
+    private sealed interface QueueItem permits PendingWrite, FlushRequest {}
 
     /**
      * A pending write waiting to be batched and sent to the Log.
      */
-    private static class PendingWrite {
+    private static final class PendingWrite implements QueueItem {
         final Record record;
         final CompletableFuture<Void> future;
 
@@ -72,13 +75,18 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
         }
     }
 
+    /** A request to flush buffered data to durable storage. */
+    private static final class FlushRequest implements QueueItem {
+        final CompletableFuture<Void> future = new CompletableFuture<>();
+    }
+
     /**
      * Creates a producer for a single partition.
      *
      * @param log   the LogDb instance
      * @param topic the topic name (used as the Log key)
      */
-    public OpendataBenchmarkProducer(LogDb log, String topic) {
+    public OpenDataBenchmarkProducer(LogDb log, String topic) {
         this(LogAppender.wrap(log), topic, 1);
     }
 
@@ -89,7 +97,7 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
      * @param topic         the topic name (prefix for partition-keys)
      * @param numPartitions number of partitions to distribute messages across
      */
-    public OpendataBenchmarkProducer(LogDb log, String topic, int numPartitions) {
+    public OpenDataBenchmarkProducer(LogDb log, String topic, int numPartitions) {
         this(LogAppender.wrap(log), topic, numPartitions);
     }
 
@@ -100,7 +108,7 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
      * @param topic         the topic name (prefix for partition-keys)
      * @param numPartitions number of partitions to distribute messages across
      */
-    OpendataBenchmarkProducer(LogAppender appender, String topic, int numPartitions) {
+    OpenDataBenchmarkProducer(LogAppender appender, String topic, int numPartitions) {
         this.appender = appender;
         this.numPartitions = numPartitions;
         this.partitionKeys = new byte[numPartitions][];
@@ -139,6 +147,22 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
     }
 
     @Override
+    public CompletableFuture<Void> flush() {
+        if (closed) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        FlushRequest request = new FlushRequest();
+        try {
+            writeQueue.put(request);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            request.future.completeExceptionally(e);
+        }
+        return request.future;
+    }
+
+    @Override
     public void close() throws Exception {
         if (!closed) {
             closed = true;
@@ -152,10 +176,15 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
             }
 
             // Fail any remaining queued writes
-            PendingWrite pending;
-            while ((pending = writeQueue.poll()) != null) {
-                pending.future.completeExceptionally(
-                        new IllegalStateException("Producer closed before write completed"));
+            QueueItem item;
+            while ((item = writeQueue.poll()) != null) {
+                if (item instanceof PendingWrite pending) {
+                    pending.future.completeExceptionally(
+                            new IllegalStateException("Producer closed before write completed"));
+                } else if (item instanceof FlushRequest flushReq) {
+                    flushReq.future.completeExceptionally(
+                            new IllegalStateException("Producer closed before flush completed"));
+                }
             }
         }
         // Note: Producer doesn't own the Log, so we don't close it
@@ -173,11 +202,36 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
         while (!closed) {
             try {
                 // Block until at least one item is available
-                PendingWrite first = writeQueue.take();
-                batch.add(first);
+                QueueItem first = writeQueue.take();
 
-                // Grab whatever else is available (non-blocking), up to batch limit
-                writeQueue.drainTo(batch, MAX_BATCH_SIZE - 1);
+                if (first instanceof FlushRequest flushReq) {
+                    // Write any accumulated batch first
+                    if (!batch.isEmpty()) {
+                        writeBatch(batch);
+                        batch.clear();
+                    }
+                    // Then flush to storage
+                    try {
+                        appender.flush();
+                        flushReq.future.complete(null);
+                    } catch (Exception e) {
+                        flushReq.future.completeExceptionally(e);
+                    }
+                    continue;
+                }
+
+                // Normal write path
+                batch.add((PendingWrite) first);
+
+                // Drain more items, stopping at flush requests
+                QueueItem item;
+                while (batch.size() < MAX_BATCH_SIZE && (item = writeQueue.poll()) != null) {
+                    if (item instanceof FlushRequest) {
+                        writeQueue.put(item); // Put back for next iteration
+                        break;
+                    }
+                    batch.add((PendingWrite) item);
+                }
 
                 // Write the batch immediately
                 writeBatch(batch);
@@ -197,7 +251,13 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
         }
 
         // Drain remaining items on shutdown
-        writeQueue.drainTo(batch);
+        List<QueueItem> remaining = new ArrayList<>();
+        writeQueue.drainTo(remaining);
+        for (QueueItem item : remaining) {
+            if (item instanceof PendingWrite pw) {
+                batch.add(pw);
+            }
+        }
         if (!batch.isEmpty()) {
             try {
                 writeBatch(batch);

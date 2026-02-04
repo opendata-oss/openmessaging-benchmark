@@ -30,6 +30,14 @@ public_key_path = "~/.ssh/opendata_aws.pub"
 region          = "us-west-2"
 az              = "us-west-2a"
 s3_bucket       = "your-bucket-name"
+
+# Optional: specify git branches to build (defaults shown)
+opendata_branch      = "main"
+opendata_java_branch = "main"
+benchmark_branch     = "master"
+
+# Consumer configuration
+separate_reader      = true   # true = realistic e2e latency, false = shared instance
 ```
 
 ### Using an Existing VPC with S3 Gateway (Optional)
@@ -58,13 +66,18 @@ cd driver-opendata/deploy
 terraform init
 terraform apply
 
-# Create Ansible inventory from Terraform output
-./setup-inventory.sh
+# Generate inventory and run Ansible (reads all config from Terraform)
+./run-deploy.sh
+```
 
-# Deploy benchmark (pass S3 config from Terraform)
-ansible-playbook deploy.yaml \
-  -e "s3_bucket=$(terraform output -raw s3_bucket)" \
-  -e "region=$(terraform output -raw region)"
+The `run-deploy.sh` script automatically:
+1. Generates Ansible inventory from Terraform outputs
+2. Passes all configuration (S3 bucket, region, branch names) to Ansible
+
+To pass additional Ansible options (e.g., verbose mode):
+
+```bash
+./run-deploy.sh -v
 ```
 
 **Note:** When using an existing VPC with `associate_public_ip = false`, you must run Ansible from a host that can reach the private IPs (e.g., a bastion host, VPN, or AWS SSM).

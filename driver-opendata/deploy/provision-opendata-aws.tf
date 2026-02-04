@@ -221,6 +221,26 @@ variable "s3_bucket" {
   description = "S3 bucket for OpenData/SlateDB storage"
 }
 
+variable "opendata_branch" {
+  description = "Git branch/tag for opendata repository"
+  default     = "main"
+}
+
+variable "opendata_java_branch" {
+  description = "Git branch/tag for opendata-java repository"
+  default     = "main"
+}
+
+variable "benchmark_branch" {
+  description = "Git branch/tag for openmessaging-benchmark repository"
+  default     = "master"
+}
+
+variable "separate_reader" {
+  description = "Use separate LogDb reader for consumer (true = realistic e2e latency, false = shared instance)"
+  default     = true
+}
+
 # Instance profile
 resource "aws_iam_instance_profile" "benchmark_profile" {
   name = "opendata-benchmark-profile-${random_id.hash.hex}"
@@ -275,4 +295,20 @@ output "subnet_id" {
 
 output "using_existing_vpc" {
   value = local.use_existing_vpc
+}
+
+output "opendata_branch" {
+  value = var.opendata_branch
+}
+
+output "opendata_java_branch" {
+  value = var.opendata_java_branch
+}
+
+output "benchmark_branch" {
+  value = var.benchmark_branch
+}
+
+output "separate_reader" {
+  value = var.separate_reader
 }

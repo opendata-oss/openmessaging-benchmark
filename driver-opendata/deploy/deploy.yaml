@@ -22,6 +22,12 @@
     opendata_repo: "https://github.com/opendata-oss/opendata.git"
     opendata_java_repo: "https://github.com/opendata-oss/opendata-java.git"
     benchmark_repo: "https://github.com/opendata-oss/openmessaging-benchmark.git"
+    # Branch defaults (override via -e opendata_branch=xxx)
+    opendata_branch: "main"
+    opendata_java_branch: "main"
+    benchmark_branch: "master"
+    # Consumer config
+    separate_reader: true
     # s3_bucket and aws_region must be passed via -e (see README)
   tasks:
     # System setup
@@ -116,21 +122,21 @@
       git:
         repo: "{{ opendata_repo }}"
         dest: /opt/opendata
-        version: expose-compactor-knobs
+        version: "{{ opendata_branch }}"
         force: yes
 
     - name: Clone opendata-java repository
       git:
         repo: "{{ opendata_java_repo }}"
         dest: /opt/opendata-java
-        version: main
+        version: "{{ opendata_java_branch }}"
         force: yes
 
     - name: Clone benchmark repository
       git:
         repo: "{{ benchmark_repo }}"
         dest: /opt/benchmark-src
-        version: master
+        version: "{{ benchmark_branch }}"
         force: yes
 
     # Build opendata-java native library

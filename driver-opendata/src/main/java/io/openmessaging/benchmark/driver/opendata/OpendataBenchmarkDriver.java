@@ -41,26 +41,26 @@ import org.apache.bookkeeper.stats.StatsLogger;
  *   <li>Consumer → LogReader (polling-based initially)</li>
  * </ul>
  *
- * <p>Configuration is loaded from a YAML file. See {@link OpendataConfig} for options.
+ * <p>Configuration is loaded from a YAML file. See {@link OpenDataConfig} for options.
  */
-public class OpendataBenchmarkDriver implements BenchmarkDriver {
+public class OpenDataBenchmarkDriver implements BenchmarkDriver {
 
     private LogDb log;
-    private OpendataConfig config;
+    private OpenDataConfig config;
 
     /** Tracks partition count per topic for producer/consumer creation. */
     private final Map<String, Integer> topicPartitions = new ConcurrentHashMap<>();
 
     @Override
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
-        this.config = OpendataConfig.load(configurationFile);
+        this.config = OpenDataConfig.load(configurationFile);
 
         StorageConfig storageConfig = buildStorageConfig(config.storage);
         LogDbConfig logDbConfig = new LogDbConfig(storageConfig);
         this.log = LogDb.open(logDbConfig);
     }
 
-    private StorageConfig buildStorageConfig(OpendataConfig.StorageConfig storage) {
+    private StorageConfig buildStorageConfig(OpenDataConfig.StorageConfig storage) {
         if ("in-memory".equalsIgnoreCase(storage.type)) {
             return new StorageConfig.InMemory();
         }
@@ -70,7 +70,7 @@ public class OpendataBenchmarkDriver implements BenchmarkDriver {
         return new StorageConfig.SlateDb(storage.path, objectStoreConfig, storage.settingsPath);
     }
 
-    private ObjectStoreConfig buildObjectStoreConfig(OpendataConfig.StorageConfig storage) {
+    private ObjectStoreConfig buildObjectStoreConfig(OpenDataConfig.StorageConfig storage) {
         if ("in-memory".equalsIgnoreCase(storage.objectStore)) {
             return new ObjectStoreConfig.InMemory();
         } else if ("s3".equalsIgnoreCase(storage.objectStore)) {
@@ -98,7 +98,7 @@ public class OpendataBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
         int partitions = topicPartitions.getOrDefault(topic, 1);
-        BenchmarkProducer producer = new OpendataBenchmarkProducer(log, topic, partitions);
+        BenchmarkProducer producer = new OpenDataBenchmarkProducer(log, topic, partitions);
         return CompletableFuture.completedFuture(producer);
     }
 
@@ -124,7 +124,7 @@ public class OpendataBenchmarkDriver implements BenchmarkDriver {
         }
 
         // Consumer reads from all partitions for this topic
-        BenchmarkConsumer consumer = new OpendataBenchmarkConsumer(
+        BenchmarkConsumer consumer = new OpenDataBenchmarkConsumer(
                 reader,
                 ownedReader,  // null if sharing LogDb, non-null if we created a LogDbReader
                 topic,

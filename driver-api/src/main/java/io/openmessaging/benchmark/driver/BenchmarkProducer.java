@@ -27,4 +27,16 @@ public interface BenchmarkProducer extends AutoCloseable {
      * @return a future that will be triggered when the message is successfully published
      */
     CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload);
+
+    /**
+     * Flush any buffered data to durable storage.
+     *
+     * <p>This ensures all previously sent messages are persisted and visible to readers.
+     * The default implementation completes immediately for drivers that don't require explicit flushing.
+     *
+     * @return a future that completes when the flush is done
+     */
+    default CompletableFuture<Void> flush() {
+        return CompletableFuture.completedFuture(null);
+    }
 }

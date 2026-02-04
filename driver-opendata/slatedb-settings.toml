@@ -1,4 +1,12 @@
-# SlateDB settings
+# SlateDB settings for benchmarking with separate reader
 #
-# See https://docs.rs/slatedb/latest/slatedb/config/ for available options.
-# Leave empty to use defaults.
+# See https://slatedb.io/docs/operations/tuning/ for available options.
+
+# Flush memtable to L0 SST frequently so separate readers can see data sooner.
+# Default is 64 MiB (67108864) - too large for real-time benchmarking.
+# Using 256 KB means L0 SSTs are created after ~256KB of writes.
+l0_sst_size_bytes = 262144
+
+# Flush interval - how often memtable is written to WAL.
+# Default is 100ms which is fine for durability.
+flush_interval = "100ms"

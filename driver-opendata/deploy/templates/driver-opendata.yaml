@@ -13,7 +13,7 @@
 #
 
 name: OpenData-SlateDB
-driverClass: io.openmessaging.benchmark.driver.opendata.OpendataBenchmarkDriver
+driverClass: io.openmessaging.benchmark.driver.opendata.OpenDataBenchmarkDriver
 
 storage:
   type: slatedb
@@ -23,6 +23,7 @@ storage:
   s3Region: {{ region }}
 
 consumer:
+  separateReader: {{ separate_reader | lower }}
   pollIntervalMs: 10
   pollBatchSize: 1000
   queueCapacity: 10000

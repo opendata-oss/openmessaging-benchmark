@@ -14,9 +14,12 @@
 package io.openmessaging.benchmark.driver.opendata;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,10 +39,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-class OpendataBenchmarkProducerTest {
+class OpenDataBenchmarkProducerTest {
 
     private LogAppender mockAppender;
-    private OpendataBenchmarkProducer producer;
+    private OpenDataBenchmarkProducer producer;
 
     @BeforeEach
     void setUp() {
@@ -57,7 +60,7 @@ class OpendataBenchmarkProducerTest {
 
     @Test
     void sendAsyncShouldCompleteSuccessfully() throws Exception {
-        producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 1);
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
 
         CompletableFuture<Void> future = producer.sendAsync(Optional.empty(), "test-payload".getBytes());
 
@@ -86,7 +89,7 @@ class OpendataBenchmarkProducerTest {
             return new AppendResult(0, System.currentTimeMillis());
         });
 
-        producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 1);
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
 
         // Send multiple messages quickly
         List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -112,7 +115,7 @@ class OpendataBenchmarkProducerTest {
         RuntimeException testException = new RuntimeException("Test error");
         when(mockAppender.append(any(Record[].class))).thenThrow(testException);
 
-        producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 1);
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
 
         CompletableFuture<Void> future = producer.sendAsync(Optional.empty(), "test-payload".getBytes());
 
@@ -128,7 +131,7 @@ class OpendataBenchmarkProducerTest {
         when(mockAppender.append(recordsCaptor.capture()))
                 .thenReturn(new AppendResult(0, System.currentTimeMillis()));
 
-        producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 4);
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 4);
 
         // Send multiple messages with the same key
         String key = "consistent-key";
@@ -164,7 +167,7 @@ class OpendataBenchmarkProducerTest {
             return new AppendResult(0, System.currentTimeMillis());
         });
 
-        producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 4);
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 4);
 
         // Send messages without keys
         List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -198,7 +201,7 @@ class OpendataBenchmarkProducerTest {
             return new AppendResult(0, System.currentTimeMillis());
         });
 
-        producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 1);
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
 
         // Send a message
         CompletableFuture<Void> future = producer.sendAsync(Optional.empty(), "test-payload".getBytes());
@@ -236,7 +239,7 @@ class OpendataBenchmarkProducerTest {
             return new AppendResult(0, System.currentTimeMillis());
         });
 
-        producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 1);
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
 
         // Send first message (will block in append)
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), "first".getBytes());
@@ -264,7 +267,7 @@ class OpendataBenchmarkProducerTest {
 
     @Test
     void sendAsyncAfterCloseShouldFail() throws Exception {
-        producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 1);
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
         producer.close();
 
         CompletableFuture<Void> future = producer.sendAsync(Optional.empty(), "test".getBytes());
@@ -284,7 +287,7 @@ class OpendataBenchmarkProducerTest {
             return new AppendResult(0, System.currentTimeMillis());
         });
 
-        producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 1);
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
 
         long beforeSend = System.currentTimeMillis();
         CompletableFuture<Void> future = producer.sendAsync(Optional.empty(), "test".getBytes());
@@ -298,5 +301,58 @@ class OpendataBenchmarkProducerTest {
 
         // Timestamp should be captured at send time, not append time
         assertThat(recordTimestamp).isBetween(beforeSend, afterSend);
+    }
+
+    @Test
+    void flushShouldDrainQueueAndCallAppenderFlush() throws Exception {
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
+
+        // Send some messages
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            futures.add(producer.sendAsync(Optional.empty(), ("payload-" + i).getBytes()));
+        }
+
+        // Flush should wait for all writes and call appender.flush()
+        producer.flush().get(5, TimeUnit.SECONDS);
+
+        // All futures should be complete
+        for (CompletableFuture<Void> future : futures) {
+            assertThat(future.isDone()).isTrue();
+        }
+
+        // Appender.flush() should have been called
+        verify(mockAppender, timeout(1000)).flush();
+    }
+
+    @Test
+    void flushAfterCloseShouldNotThrow() throws Exception {
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
+        producer.close();
+
+        // Flush after close should complete immediately
+        CompletableFuture<Void> flushFuture = producer.flush();
+        assertThat(flushFuture.isDone()).isTrue();
+        assertThatCode(() -> flushFuture.get()).doesNotThrowAnyException();
+
+        // Appender.flush() should not have been called
+        verify(mockAppender, never()).flush();
+    }
+
+    @Test
+    void flushShouldPropagateAppenderFlushErrors() throws Exception {
+        RuntimeException testException = new RuntimeException("Flush failed");
+        doThrow(testException).when(mockAppender).flush();
+
+        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
+
+        // Send a message first
+        producer.sendAsync(Optional.empty(), "test".getBytes()).get(5, TimeUnit.SECONDS);
+
+        // Flush should propagate the exception via the future
+        CompletableFuture<Void> flushFuture = producer.flush();
+        assertThatThrownBy(() -> flushFuture.get(5, TimeUnit.SECONDS))
+                .isInstanceOf(ExecutionException.class)
+                .hasRootCauseMessage("Flush failed");
     }
 }

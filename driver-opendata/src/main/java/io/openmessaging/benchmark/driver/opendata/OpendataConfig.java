@@ -26,7 +26,7 @@ import java.io.IOException;
  * <p>Example YAML configuration:
  * <pre>
  * name: OpenData
- * driverClass: io.openmessaging.benchmark.driver.opendata.OpendataBenchmarkDriver
+ * driverClass: io.openmessaging.benchmark.driver.opendata.OpenDataBenchmarkDriver
  *
  * # Log storage configuration
  * storage:
@@ -44,13 +44,13 @@ import java.io.IOException;
  *   queueCapacity: 10000
  * </pre>
  */
-public class OpendataConfig {
+public class OpenDataConfig {
 
     /** Driver name (displayed in benchmark results). */
     public String name = "OpenData";
 
     /** Driver class (used by OMB to instantiate the driver). */
-    public String driverClass = "io.openmessaging.benchmark.driver.opendata.OpendataBenchmarkDriver";
+    public String driverClass = "io.openmessaging.benchmark.driver.opendata.OpenDataBenchmarkDriver";
 
     /** Log storage configuration. */
     public StorageConfig storage = new StorageConfig();
@@ -68,10 +68,10 @@ public class OpendataConfig {
      * @return the parsed configuration
      * @throws IOException if the file cannot be read or parsed
      */
-    public static OpendataConfig load(File configFile) throws IOException {
+    public static OpenDataConfig load(File configFile) throws IOException {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory())
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        return mapper.readValue(configFile, OpendataConfig.class);
+        return mapper.readValue(configFile, OpenDataConfig.class);
     }
 
     /**

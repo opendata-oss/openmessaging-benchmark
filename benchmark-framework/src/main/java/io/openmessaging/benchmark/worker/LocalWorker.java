@@ -47,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
@@ -188,9 +189,28 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
     @Override
     public void probeProducers() throws IOException {
-        producers.forEach(
-                producer ->
-                        producer.sendAsync(Optional.of("key"), new byte[10]).thenRun(stats::recordMessageSent));
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        producers.forEach(producer -> {
+            CompletableFuture<Void> future = producer.sendAsync(Optional.of("key"), new byte[10]);
+            future.thenRun(stats::recordMessageSent);
+            futures.add(future);
+        });
+
+        try {
+            // Wait for all sends to complete
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                    .get(30, TimeUnit.SECONDS);
+
+            // Flush all producers to ensure data is visible to readers
+            List<CompletableFuture<Void>> flushFutures = new ArrayList<>();
+            for (BenchmarkProducer producer : producers) {
+                flushFutures.add(producer.flush());
+            }
+            CompletableFuture.allOf(flushFutures.toArray(new CompletableFuture[0]))
+                    .get(30, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IOException("Failed to probe producers", e);
+        }
     }
 
     private void submitProducersToExecutor(

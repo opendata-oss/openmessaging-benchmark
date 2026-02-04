@@ -42,14 +42,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   <li>Single dispatcher thread calls the OMB callback (ensures thread-safety)</li>
  * </ul>
  *
- * <p>Configuration options (via {@link OpendataConfig.ConsumerConfig}):
+ * <p>Configuration options (via {@link OpenDataConfig.ConsumerConfig}):
  * <ul>
  *   <li>pollIntervalMs - sleep duration when no data available</li>
  *   <li>pollBatchSize - max entries per poll</li>
  *   <li>queueCapacity - backpressure threshold</li>
  * </ul>
  */
-public class OpendataBenchmarkConsumer implements BenchmarkConsumer {
+public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
 
     // Default values (used when config not provided)
     private static final int DEFAULT_POLL_BATCH_SIZE = 1000;
@@ -79,8 +79,8 @@ public class OpendataBenchmarkConsumer implements BenchmarkConsumer {
      * @param config        consumer configuration (nullable, uses defaults if null)
      * @param callback      the OMB callback for received messages
      */
-    public OpendataBenchmarkConsumer(LogRead reader, Closeable ownedResource, String topic,
-                            int numPartitions, OpendataConfig.ConsumerConfig config,
+    public OpenDataBenchmarkConsumer(LogRead reader, Closeable ownedResource, String topic,
+                            int numPartitions, OpenDataConfig.ConsumerConfig config,
                             ConsumerCallback callback) {
         // Apply configuration or defaults
         this.pollBatchSize = config != null ? config.pollBatchSize : DEFAULT_POLL_BATCH_SIZE;
