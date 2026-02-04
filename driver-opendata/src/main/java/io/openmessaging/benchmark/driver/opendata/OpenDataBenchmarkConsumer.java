@@ -44,7 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Configuration options (via {@link OpenDataConfig.ConsumerConfig}):
  * <ul>
- *   <li>pollIntervalMs - sleep duration when no data available</li>
+ *   <li>refreshIntervalMs - sleep duration when no data available</li>
  *   <li>pollBatchSize - max entries per poll</li>
  *   <li>queueCapacity - backpressure threshold</li>
  * </ul>
@@ -53,7 +53,7 @@ public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
 
     // Default values (used when config not provided)
     private static final int DEFAULT_POLL_BATCH_SIZE = 1000;
-    private static final long DEFAULT_POLL_INTERVAL_MS = 10;
+    private static final long DEFAULT_REFRESH_INTERVAL_MS = 10;
     private static final int DEFAULT_QUEUE_CAPACITY = 10_000;
 
     private final LogRead reader;
@@ -67,7 +67,7 @@ public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
 
     // Configurable parameters
     private final int pollBatchSize;
-    private final long pollIntervalMs;
+    private final long refreshIntervalMs;
 
     /**
      * Creates a consumer for multiple partitions with custom config.
@@ -84,7 +84,7 @@ public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
                             ConsumerCallback callback) {
         // Apply configuration or defaults
         this.pollBatchSize = config != null ? config.pollBatchSize : DEFAULT_POLL_BATCH_SIZE;
-        this.pollIntervalMs = config != null ? config.pollIntervalMs : DEFAULT_POLL_INTERVAL_MS;
+        this.refreshIntervalMs = config != null ? config.refreshIntervalMs : DEFAULT_REFRESH_INTERVAL_MS;
         int queueCapacity = config != null ? config.queueCapacity : DEFAULT_QUEUE_CAPACITY;
 
         this.reader = reader;
@@ -134,7 +134,7 @@ public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
     private void dispatchLoop() {
         while (running.get() || !entryQueue.isEmpty()) {
             try {
-                LogEntry entry = entryQueue.poll(pollIntervalMs, TimeUnit.MILLISECONDS);
+                LogEntry entry = entryQueue.poll(refreshIntervalMs, TimeUnit.MILLISECONDS);
                 if (entry != null) {
                     callback.messageReceived(entry.value(), entry.timestamp());
                 }
@@ -177,19 +177,18 @@ public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
         @Override
         public void run() {
             while (running.get()) {
+                long cycleStart = System.nanoTime();
                 try {
                     List<LogEntry> entries = reader.scan(partitionKey, currentSequence, pollBatchSize);
 
-                    if (entries.isEmpty()) {
-                        // No data available, sleep before next poll
-                        Thread.sleep(pollIntervalMs);
-                    } else {
-                        for (LogEntry entry : entries) {
-                            // Block if queue is full (backpressure)
-                            entryQueue.put(entry);
-                            currentSequence = entry.sequence() + 1;
-                        }
+                    for (LogEntry entry : entries) {
+                        // Block if queue is full (backpressure)
+                        entryQueue.put(entry);
+                        currentSequence = entry.sequence() + 1;
                     }
+
+                    // Sleep for remaining time in refresh interval
+                    sleepRemaining(cycleStart);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
@@ -199,13 +198,21 @@ public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
                                 + new String(partitionKey, StandardCharsets.UTF_8) + ": "
                                 + e.getMessage());
                         try {
-                            Thread.sleep(pollIntervalMs);
+                            sleepRemaining(cycleStart);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
                             break;
                         }
                     }
                 }
+            }
+        }
+
+        private void sleepRemaining(long cycleStartNanos) throws InterruptedException {
+            long elapsedMs = (System.nanoTime() - cycleStartNanos) / 1_000_000;
+            long sleepMs = refreshIntervalMs - elapsedMs;
+            if (sleepMs > 0) {
+                Thread.sleep(sleepMs);
             }
         }
     }

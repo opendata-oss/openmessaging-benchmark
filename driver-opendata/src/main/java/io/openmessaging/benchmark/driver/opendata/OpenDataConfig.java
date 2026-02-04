@@ -144,12 +144,14 @@ public class OpenDataConfig {
         public boolean separateReader = true;
 
         /**
-         * Interval between polls when no data is available (ms).
-         * Lower values reduce latency but increase CPU usage.
+         * Interval for refreshing/polling for new log data (ms).
+         * Controls both the native reader refresh interval (when separateReader is true)
+         * and the application-level poll interval when scans return empty.
+         * Lower values reduce end-to-end latency but increase CPU/IO usage.
          * Default: 10ms
          */
-        @JsonProperty("pollIntervalMs")
-        public long pollIntervalMs = 10;
+        @JsonProperty("refreshIntervalMs")
+        public long refreshIntervalMs = 10;
 
         /**
          * Maximum entries to read per poll.

@@ -24,6 +24,6 @@ storage:
 
 consumer:
   separateReader: {{ separate_reader | lower }}
-  pollIntervalMs: 10
+  refreshIntervalMs: {{ reader_refresh_interval_ms | default(10) }}
   pollBatchSize: 1000
   queueCapacity: 10000

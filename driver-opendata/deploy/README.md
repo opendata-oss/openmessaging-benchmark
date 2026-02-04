@@ -37,7 +37,8 @@ opendata_java_branch = "main"
 benchmark_branch     = "master"
 
 # Consumer configuration
-separate_reader      = true   # true = realistic e2e latency, false = shared instance
+separate_reader            = true  # true = realistic e2e latency, false = shared instance
+reader_refresh_interval_ms = 10    # Interval (ms) for polling/refreshing for new data
 ```
 
 ### Using an Existing VPC with S3 Gateway (Optional)

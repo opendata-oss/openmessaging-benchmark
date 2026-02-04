@@ -241,6 +241,11 @@ variable "separate_reader" {
   default     = true
 }
 
+variable "reader_refresh_interval_ms" {
+  description = "Interval for refreshing/polling for new log data (ms). Controls both native reader refresh and application poll interval. Lower = less latency, more CPU."
+  default     = 10
+}
+
 # Instance profile
 resource "aws_iam_instance_profile" "benchmark_profile" {
   name = "opendata-benchmark-profile-${random_id.hash.hex}"
@@ -311,4 +316,8 @@ output "benchmark_branch" {
 
 output "separate_reader" {
   value = var.separate_reader
+}
+
+output "reader_refresh_interval_ms" {
+  value = var.reader_refresh_interval_ms
 }

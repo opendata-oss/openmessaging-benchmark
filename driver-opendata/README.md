@@ -37,7 +37,7 @@ Create a driver configuration YAML file:
 
 ```yaml
 name: OpenData
-driverClass: io.openmessaging.benchmark.driver.opendata.OpendataBenchmarkDriver
+driverClass: io.openmessaging.benchmark.driver.opendata.OpenDataBenchmarkDriver
 
 storage:
   type: slatedb           # or "in-memory"
@@ -50,7 +50,8 @@ storage:
   # settingsPath: /path/to/slatedb-settings.toml  # optional
 
 consumer:
-  pollIntervalMs: 10      # Polling interval when no data
+  separateReader: true    # true = separate reader process, false = shared instance
+  refreshIntervalMs: 10   # Interval for polling/refreshing for new data
   pollBatchSize: 1000     # Max entries per poll
   queueCapacity: 10000    # Internal queue size
 ```
@@ -69,6 +70,19 @@ consumer:
 | `in-memory` | In-memory object store |
 | `local`     | Local filesystem       |
 | `s3`        | Amazon S3              |
+
+### Consumer Options
+
+|       Option        | Default |                              Description                              |
+|---------------------|---------|-----------------------------------------------------------------------|
+| `separateReader`    | `true`  | Use separate LogDbReader for realistic e2e latency measurement        |
+| `refreshIntervalMs` | `10`    | Interval (ms) for polling/refreshing for new data                     |
+| `pollBatchSize`     | `1000`  | Maximum entries to read per poll                                      |
+| `queueCapacity`     | `10000` | Internal queue size for backpressure                                  |
+
+**`separateReader`**: When `true`, consumers use an independent `LogDbReader` that accesses storage directly, simulating a separate process. This provides realistic end-to-end latency measurements. When `false`, consumers share the producer's `LogDb` instance (faster but less realistic for latency benchmarks).
+
+**`refreshIntervalMs`**: Controls both the native reader's refresh interval (how often it discovers new data written by other processes) and the application-level polling cadence. The poller maintains a consistent interval by accounting for time spent reading records—if reading takes 500ms with a 1000ms interval, it only sleeps for the remaining 500ms.
 
 ## Running a Benchmark
 
