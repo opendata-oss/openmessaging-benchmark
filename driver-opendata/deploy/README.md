@@ -47,6 +47,8 @@ existing_subnet_id = "subnet-0123456789abcdef0"
 
 When these variables are set, Terraform skips creating networking resources (VPC, subnet, internet gateway) and deploys directly into your existing infrastructure.
 
+By default, instances get a public IP (`associate_public_ip = true`) for direct SSH access. If your existing subnet doesn't have a route to an internet gateway, set `associate_public_ip = false` and access via bastion or VPN.
+
 ## Deploy
 
 ```bash
@@ -57,20 +59,15 @@ terraform init
 terraform apply
 
 # Create Ansible inventory from Terraform output
-echo "[client]" > hosts.ini
-terraform output -json client_public_ips | jq -r '.[]' >> hosts.ini
-
-# Add private IPs as host vars
-for ip in $(terraform output -json client_public_ips | jq -r '.[]'); do
-  priv=$(terraform output -json client_private_ips | jq -r ".[$(grep -n $ip hosts.ini | cut -d: -f1 | head -1) - 2]")
-  sed -i '' "s/$ip/$ip private_ip=$priv/" hosts.ini
-done
+./setup-inventory.sh
 
 # Deploy benchmark (pass S3 config from Terraform)
 ansible-playbook deploy.yaml \
   -e "s3_bucket=$(terraform output -raw s3_bucket)" \
   -e "region=$(terraform output -raw region)"
 ```
+
+**Note:** When using an existing VPC with `associate_public_ip = false`, you must run Ansible from a host that can reach the private IPs (e.g., a bastion host, VPN, or AWS SSM).
 
 ## Run Benchmark
 
@@ -79,6 +76,8 @@ SSH to the client:
 ```bash
 ssh -i ~/.ssh/opendata_aws ec2-user@$(terraform output -raw client_ssh_host)
 ```
+
+If using `associate_public_ip = false`, use the private IP and access via bastion or VPN.
 
 Run a benchmark:
 

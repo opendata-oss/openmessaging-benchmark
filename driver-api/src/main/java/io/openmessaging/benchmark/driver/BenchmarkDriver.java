@@ -122,19 +122,41 @@ public interface BenchmarkDriver extends AutoCloseable {
 
     record TopicInfo(String topic, int partitions) {
         // Compatibility getters for existing drivers using Lombok-style names
-        public String getTopic() { return topic; }
-        public int getPartitions() { return partitions; }
+        public String getTopic() {
+            return topic;
+        }
+
+        public int getPartitions() {
+            return partitions;
+        }
     }
 
     record ProducerInfo(int id, String topic) {
-        public int getId() { return id; }
-        public String getTopic() { return topic; }
+        public int getId() {
+            return id;
+        }
+
+        public String getTopic() {
+            return topic;
+        }
     }
 
-    record ConsumerInfo(int id, String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        public int getId() { return id; }
-        public String getTopic() { return topic; }
-        public String getSubscriptionName() { return subscriptionName; }
-        public ConsumerCallback getConsumerCallback() { return consumerCallback; }
+    record ConsumerInfo(
+            int id, String topic, String subscriptionName, ConsumerCallback consumerCallback) {
+        public int getId() {
+            return id;
+        }
+
+        public String getTopic() {
+            return topic;
+        }
+
+        public String getSubscriptionName() {
+            return subscriptionName;
+        }
+
+        public ConsumerCallback getConsumerCallback() {
+            return consumerCallback;
+        }
     }
 }

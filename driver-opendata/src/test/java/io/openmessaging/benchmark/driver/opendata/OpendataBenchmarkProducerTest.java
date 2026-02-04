@@ -56,7 +56,7 @@ class OpendataBenchmarkProducerTest {
     }
 
     @Test
-    void sendAsync_shouldCompleteSuccessfully() throws Exception {
+    void sendAsyncShouldCompleteSuccessfully() throws Exception {
         producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 1);
 
         CompletableFuture<Void> future = producer.sendAsync(Optional.empty(), "test-payload".getBytes());
@@ -69,7 +69,7 @@ class OpendataBenchmarkProducerTest {
     }
 
     @Test
-    void sendAsync_shouldBatchMultipleWrites() throws Exception {
+    void sendAsyncShouldBatchMultipleWrites() throws Exception {
         // Use a latch to control when append completes, allowing writes to queue up
         CountDownLatch appendLatch = new CountDownLatch(1);
         AtomicInteger appendCount = new AtomicInteger(0);
@@ -108,7 +108,7 @@ class OpendataBenchmarkProducerTest {
     }
 
     @Test
-    void sendAsync_shouldPropagateErrors() throws Exception {
+    void sendAsyncShouldPropagateErrors() throws Exception {
         RuntimeException testException = new RuntimeException("Test error");
         when(mockAppender.append(any(Record[].class))).thenThrow(testException);
 
@@ -123,7 +123,7 @@ class OpendataBenchmarkProducerTest {
     }
 
     @Test
-    void sendAsync_withKey_shouldRouteToSamePartition() throws Exception {
+    void sendAsyncWithKeyShouldRouteToSamePartition() throws Exception {
         ArgumentCaptor<Record[]> recordsCaptor = ArgumentCaptor.forClass(Record[].class);
         when(mockAppender.append(recordsCaptor.capture()))
                 .thenReturn(new AppendResult(0, System.currentTimeMillis()));
@@ -155,7 +155,7 @@ class OpendataBenchmarkProducerTest {
     }
 
     @Test
-    void sendAsync_withoutKey_shouldRoundRobin() throws Exception {
+    void sendAsyncWithoutKeyShouldRoundRobin() throws Exception {
         ArgumentCaptor<Record[]> recordsCaptor = ArgumentCaptor.forClass(Record[].class);
 
         // Slow down appends to prevent batching
@@ -188,7 +188,7 @@ class OpendataBenchmarkProducerTest {
     }
 
     @Test
-    void close_shouldCompleteRemainingWrites() throws Exception {
+    void closeShouldCompleteRemainingWrites() throws Exception {
         CountDownLatch appendStarted = new CountDownLatch(1);
         CountDownLatch appendCanProceed = new CountDownLatch(1);
 
@@ -223,7 +223,7 @@ class OpendataBenchmarkProducerTest {
     }
 
     @Test
-    void close_shouldFailPendingWritesAfterShutdown() throws Exception {
+    void closeShouldFailPendingWritesAfterShutdown() throws Exception {
         // Block the first append indefinitely
         CountDownLatch blockForever = new CountDownLatch(1);
         AtomicInteger appendCount = new AtomicInteger(0);
@@ -263,7 +263,7 @@ class OpendataBenchmarkProducerTest {
     }
 
     @Test
-    void sendAsync_afterClose_shouldFail() throws Exception {
+    void sendAsyncAfterCloseShouldFail() throws Exception {
         producer = new OpendataBenchmarkProducer(mockAppender, "test-topic", 1);
         producer.close();
 
@@ -275,7 +275,7 @@ class OpendataBenchmarkProducerTest {
     }
 
     @Test
-    void sendAsync_shouldCaptureTimestampAtSubmission() throws Exception {
+    void sendAsyncShouldCaptureTimestampAtSubmission() throws Exception {
         ArgumentCaptor<Record[]> recordsCaptor = ArgumentCaptor.forClass(Record[].class);
 
         // Delay the append

@@ -211,6 +211,8 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
 
     /**
      * Writes a batch of records to the Log and completes their futures.
+     *
+     * @param batch the batch of pending writes to process
      */
     private void writeBatch(List<PendingWrite> batch) {
         if (batch.isEmpty()) {
@@ -244,6 +246,9 @@ public class OpendataBenchmarkProducer implements BenchmarkProducer {
      * <p>If a key is provided, it's hashed to deterministically select a partition
      * (same key always routes to same partition for ordering guarantees).
      * If no key, round-robin across partitions.
+     *
+     * @param optionalKey the optional message key for partition selection
+     * @return the partition key bytes
      */
     private byte[] selectPartitionKey(Optional<String> optionalKey) {
         if (numPartitions == 1) {

@@ -13,11 +13,11 @@
  */
 package io.openmessaging.benchmark.driver.opendata;
 
-import dev.opendata.LogDb;
 import dev.opendata.LogEntry;
-import dev.opendata.LogReader;
+import dev.opendata.LogRead;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import java.io.Closeable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,7 +56,8 @@ public class OpendataBenchmarkConsumer implements BenchmarkConsumer {
     private static final long DEFAULT_POLL_INTERVAL_MS = 10;
     private static final int DEFAULT_QUEUE_CAPACITY = 10_000;
 
-    private final LogReader reader;
+    private final LogRead reader;
+    private final Closeable ownedResource;  // non-null if we own the reader and must close it
     private final ConsumerCallback callback;
     private final BlockingQueue<LogEntry> entryQueue;
     private final ExecutorService pollerExecutor;
@@ -69,36 +70,25 @@ public class OpendataBenchmarkConsumer implements BenchmarkConsumer {
     private final long pollIntervalMs;
 
     /**
-     * Creates a consumer for a single partition with default config.
-     */
-    public OpendataBenchmarkConsumer(LogDb log, String topic, ConsumerCallback callback) {
-        this(log, topic, 1, null, callback);
-    }
-
-    /**
-     * Creates a consumer for multiple partitions with default config.
-     */
-    public OpendataBenchmarkConsumer(LogDb log, String topic, int numPartitions, ConsumerCallback callback) {
-        this(log, topic, numPartitions, null, callback);
-    }
-
-    /**
      * Creates a consumer for multiple partitions with custom config.
      *
-     * @param log           the LogDb instance
+     * @param reader        the LogRead instance for reading entries
+     * @param ownedResource if non-null, will be closed when consumer is closed (for LogDbReader)
      * @param topic         the topic name (prefix for partition-keys)
      * @param numPartitions number of partitions to consume from
      * @param config        consumer configuration (nullable, uses defaults if null)
      * @param callback      the OMB callback for received messages
      */
-    public OpendataBenchmarkConsumer(LogDb log, String topic, int numPartitions,
-                            OpendataConfig.ConsumerConfig config, ConsumerCallback callback) {
+    public OpendataBenchmarkConsumer(LogRead reader, Closeable ownedResource, String topic,
+                            int numPartitions, OpendataConfig.ConsumerConfig config,
+                            ConsumerCallback callback) {
         // Apply configuration or defaults
         this.pollBatchSize = config != null ? config.pollBatchSize : DEFAULT_POLL_BATCH_SIZE;
         this.pollIntervalMs = config != null ? config.pollIntervalMs : DEFAULT_POLL_INTERVAL_MS;
         int queueCapacity = config != null ? config.queueCapacity : DEFAULT_QUEUE_CAPACITY;
 
-        this.reader = log.reader();
+        this.reader = reader;
+        this.ownedResource = ownedResource;
         this.callback = callback;
         this.entryQueue = new LinkedBlockingQueue<>(queueCapacity);
         this.pollers = new ArrayList<>(numPartitions);
@@ -167,7 +157,10 @@ public class OpendataBenchmarkConsumer implements BenchmarkConsumer {
         dispatcherExecutor.shutdown();
         dispatcherExecutor.awaitTermination(5, TimeUnit.SECONDS);
 
-        reader.close();
+        // Close owned resource (LogDbReader) if we own it
+        if (ownedResource != null) {
+            ownedResource.close();
+        }
     }
 
     /**
@@ -185,7 +178,7 @@ public class OpendataBenchmarkConsumer implements BenchmarkConsumer {
         public void run() {
             while (running.get()) {
                 try {
-                    List<LogEntry> entries = reader.read(partitionKey, currentSequence, pollBatchSize);
+                    List<LogEntry> entries = reader.scan(partitionKey, currentSequence, pollBatchSize);
 
                     if (entries.isEmpty()) {
                         // No data available, sleep before next poll
@@ -202,8 +195,9 @@ public class OpendataBenchmarkConsumer implements BenchmarkConsumer {
                     break;
                 } catch (Exception e) {
                     if (running.get()) {
-                        System.err.println("Error polling partition " +
-                            new String(partitionKey, StandardCharsets.UTF_8) + ": " + e.getMessage());
+                        System.err.println("Error polling partition "
+                                + new String(partitionKey, StandardCharsets.UTF_8) + ": "
+                                + e.getMessage());
                         try {
                             Thread.sleep(pollIntervalMs);
                         } catch (InterruptedException ie) {

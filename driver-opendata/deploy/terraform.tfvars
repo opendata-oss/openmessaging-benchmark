@@ -7,3 +7,6 @@ instance_type  = "m5n.xlarge"
 num_instances  = 1
 
 s3_bucket = "jason-opendata-bench"
+existing_vpc_id = "vpc-0cce609162e73f3f8"
+existing_subnet_id = "subnet-0ca81290f8c673111"
+associate_public_ip = true

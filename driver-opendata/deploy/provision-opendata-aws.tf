@@ -59,6 +59,11 @@ variable "existing_subnet_id" {
   default     = null
 }
 
+variable "associate_public_ip" {
+  description = "Associate a public IP with instances (required for direct SSH access)"
+  default     = true
+}
+
 locals {
   use_existing_vpc = var.existing_vpc_id != null && var.existing_subnet_id != null
   vpc_id           = local.use_existing_vpc ? var.existing_vpc_id : aws_vpc.benchmark_vpc[0].id
@@ -224,13 +229,14 @@ resource "aws_iam_instance_profile" "benchmark_profile" {
 
 # Benchmark client instances
 resource "aws_instance" "client" {
-  ami                    = var.ami
-  instance_type          = var.instance_type
-  key_name               = aws_key_pair.auth.id
-  subnet_id              = local.subnet_id
-  vpc_security_group_ids = [aws_security_group.benchmark_security_group.id]
-  iam_instance_profile   = aws_iam_instance_profile.benchmark_profile.name
-  count                  = var.num_instances
+  ami                         = var.ami
+  instance_type               = var.instance_type
+  key_name                    = aws_key_pair.auth.id
+  subnet_id                   = local.subnet_id
+  vpc_security_group_ids      = [aws_security_group.benchmark_security_group.id]
+  iam_instance_profile        = aws_iam_instance_profile.benchmark_profile.name
+  associate_public_ip_address = var.associate_public_ip
+  count                       = var.num_instances
 
   tags = {
     Name      = "opendata_client_${count.index}"

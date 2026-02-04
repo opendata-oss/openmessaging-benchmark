@@ -15,6 +15,8 @@ package io.openmessaging.benchmark.driver.opendata;
 
 import dev.opendata.LogDb;
 import dev.opendata.LogDbConfig;
+import dev.opendata.LogDbReader;
+import dev.opendata.LogRead;
 import dev.opendata.common.ObjectStoreConfig;
 import dev.opendata.common.StorageConfig;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
@@ -107,9 +109,24 @@ public class OpendataBenchmarkDriver implements BenchmarkDriver {
             ConsumerCallback callback) {
         int partitions = topicPartitions.getOrDefault(topic, 1);
 
+        // Create reader based on configuration
+        LogRead reader;
+        LogDbReader ownedReader = null;
+        if (config.consumer.separateReader) {
+            // Create separate LogDbReader for realistic e2e latency measurement
+            StorageConfig storageConfig = buildStorageConfig(config.storage);
+            LogDbConfig logDbConfig = new LogDbConfig(storageConfig);
+            ownedReader = LogDbReader.open(logDbConfig);
+            reader = ownedReader;
+        } else {
+            // Share the producer's LogDb instance
+            reader = log;
+        }
+
         // Consumer reads from all partitions for this topic
         BenchmarkConsumer consumer = new OpendataBenchmarkConsumer(
-                log,
+                reader,
+                ownedReader,  // null if sharing LogDb, non-null if we created a LogDbReader
                 topic,
                 partitions,
                 config.consumer,

@@ -63,6 +63,10 @@ public class OpendataConfig {
 
     /**
      * Loads configuration from a YAML file.
+     *
+     * @param configFile the YAML configuration file to load
+     * @return the parsed configuration
+     * @throws IOException if the file cannot be read or parsed
      */
     public static OpendataConfig load(File configFile) throws IOException {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory())
@@ -128,6 +132,17 @@ public class OpendataConfig {
      * Consumer configuration.
      */
     public static class ConsumerConfig {
+        /**
+         * Use a separate LogDb instance for the consumer.
+         * When true, creates an independent reader that accesses storage directly,
+         * simulating a separate process. This provides more realistic end-to-end
+         * latency measurements.
+         * When false, shares the producer's LogDb instance (faster but less realistic).
+         * Default: true
+         */
+        @JsonProperty("separateReader")
+        public boolean separateReader = true;
+
         /**
          * Interval between polls when no data is available (ms).
          * Lower values reduce latency but increase CPU usage.
