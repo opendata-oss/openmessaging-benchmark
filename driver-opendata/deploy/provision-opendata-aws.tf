@@ -221,11 +221,6 @@ variable "s3_bucket" {
   description = "S3 bucket for OpenData/SlateDB storage"
 }
 
-variable "opendata_branch" {
-  description = "Git branch/tag for opendata repository"
-  default     = "main"
-}
-
 variable "opendata_java_branch" {
   description = "Git branch/tag for opendata-java repository"
   default     = "main"
@@ -300,10 +295,6 @@ output "subnet_id" {
 
 output "using_existing_vpc" {
   value = local.use_existing_vpc
-}
-
-output "opendata_branch" {
-  value = var.opendata_branch
 }
 
 output "opendata_java_branch" {

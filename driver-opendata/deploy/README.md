@@ -23,22 +23,11 @@ ssh-keygen -t rsa -b 4096 -f ~/.ssh/opendata_aws
 aws s3 mb s3://opendata-benchmark --region us-west-2
 ```
 
-3. **Update terraform.tfvars** with your settings:
+3. **Copy and fill in `terraform.tfvars`**:
 
-```hcl
-public_key_path = "~/.ssh/opendata_aws.pub"
-region          = "us-west-2"
-az              = "us-west-2a"
-s3_bucket       = "your-bucket-name"
-
-# Optional: specify git branches to build (defaults shown)
-opendata_branch      = "main"
-opendata_java_branch = "main"
-benchmark_branch     = "master"
-
-# Consumer configuration
-separate_reader            = true  # true = realistic e2e latency, false = shared instance
-reader_refresh_interval_ms = 10    # Interval (ms) for polling/refreshing for new data
+```bash
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your settings (s3_bucket, VPC, etc.)
 ```
 
 ### Using an Existing VPC with S3 Gateway (Optional)

@@ -19,11 +19,9 @@
   vars:
     java_version: "17"
     rust_version: "stable"
-    opendata_repo: "https://github.com/opendata-oss/opendata.git"
     opendata_java_repo: "https://github.com/opendata-oss/opendata-java.git"
     benchmark_repo: "https://github.com/opendata-oss/openmessaging-benchmark.git"
-    # Branch defaults (override via -e opendata_branch=xxx)
-    opendata_branch: "main"
+    # Branch defaults (override via -e opendata_java_branch=xxx)
     opendata_java_branch: "main"
     benchmark_branch: "master"
     # Consumer config
@@ -118,13 +116,6 @@
         mode: '0644'
 
     # Clone repositories
-    - name: Clone opendata repository
-      git:
-        repo: "{{ opendata_repo }}"
-        dest: /opt/opendata
-        version: "{{ opendata_branch }}"
-        force: yes
-
     - name: Clone opendata-java repository
       git:
         repo: "{{ opendata_java_repo }}"

@@ -1,0 +1,18 @@
+public_key_path = "~/.ssh/opendata_aws.pub"
+region          = "us-west-2"
+az              = "us-west-2a"
+ami             = "ami-0b6d6dacf350ebc82" # Amazon Linux 2023 us-west-2
+
+instance_type  = "m5n.xlarge"
+num_instances  = 1
+
+s3_bucket = "your-bucket-name"
+
+# Optional: deploy into an existing VPC/subnet (e.g. one with an S3 gateway endpoint)
+# existing_vpc_id    = "vpc-xxx"
+# existing_subnet_id = "subnet-xxx"
+# associate_public_ip = true
+
+# Consumer configuration
+# separate_reader            = true  # true = realistic e2e latency, false = shared instance
+# reader_refresh_interval_ms = 10    # Interval (ms) for polling/refreshing for new data

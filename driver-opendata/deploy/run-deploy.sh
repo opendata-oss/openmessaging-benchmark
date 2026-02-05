@@ -28,14 +28,12 @@ echo ""
 echo "==> Reading Terraform outputs..."
 S3_BUCKET=$(terraform output -raw s3_bucket)
 REGION=$(terraform output -raw region)
-OPENDATA_BRANCH=$(terraform output -raw opendata_branch)
 OPENDATA_JAVA_BRANCH=$(terraform output -raw opendata_java_branch)
 BENCHMARK_BRANCH=$(terraform output -raw benchmark_branch)
 SEPARATE_READER=$(terraform output -raw separate_reader)
 
 echo "    s3_bucket:            $S3_BUCKET"
 echo "    region:               $REGION"
-echo "    opendata_branch:      $OPENDATA_BRANCH"
 echo "    opendata_java_branch: $OPENDATA_JAVA_BRANCH"
 echo "    benchmark_branch:     $BENCHMARK_BRANCH"
 echo "    separate_reader:      $SEPARATE_READER"
@@ -45,7 +43,6 @@ echo "==> Running Ansible playbook..."
 ansible-playbook deploy.yaml \
   -e "s3_bucket=$S3_BUCKET" \
   -e "region=$REGION" \
-  -e "opendata_branch=$OPENDATA_BRANCH" \
   -e "opendata_java_branch=$OPENDATA_JAVA_BRANCH" \
   -e "benchmark_branch=$BENCHMARK_BRANCH" \
   -e "separate_reader=$SEPARATE_READER" \
