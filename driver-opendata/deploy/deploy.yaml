@@ -17,11 +17,13 @@
   connection: ssh
   become: true
   vars:
-    java_version: "17"
+    java_version: "24"
     rust_version: "stable"
+    opendata_repo: "https://github.com/opendata-oss/opendata.git"
     opendata_java_repo: "https://github.com/opendata-oss/opendata-java.git"
     benchmark_repo: "https://github.com/opendata-oss/openmessaging-benchmark.git"
-    # Branch defaults (override via -e opendata_java_branch=xxx)
+    # Branch defaults (override via -e opendata_branch=xxx)
+    opendata_branch: "main"
     opendata_java_branch: "main"
     benchmark_branch: "master"
     # Consumer config
@@ -50,17 +52,17 @@
         state: present
       when: ansible_facts['os_family'] == "RedHat"
 
-    # Java installation
-    - name: Install Amazon Corretto 17
+    # Java 24 installation
+    - name: Install Amazon Corretto 24
       yum:
-        name: java-17-amazon-corretto-devel
+        name: java-24-amazon-corretto-devel
         state: present
       when: ansible_facts['os_family'] == "RedHat"
 
     - name: Set JAVA_HOME
       lineinfile:
         path: /etc/environment
-        line: 'JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto'
+        line: 'JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto'
         create: yes
 
     # Maven installation
@@ -116,6 +118,13 @@
         mode: '0644'
 
     # Clone repositories
+    - name: Clone opendata repository (native C library)
+      git:
+        repo: "{{ opendata_repo }}"
+        dest: /opt/opendata
+        version: "{{ opendata_branch }}"
+        force: yes
+
     - name: Clone opendata-java repository
       git:
         repo: "{{ opendata_java_repo }}"
@@ -130,29 +139,50 @@
         version: "{{ benchmark_branch }}"
         force: yes
 
-    # Build opendata-java native library
-    - name: Build opendata-java native library
+    # Build native C library from the opendata Cargo workspace
+    - name: Build opendata native C library
       shell: |
         source /root/.cargo/env
-        cd /opt/opendata-java/log/native
-        cargo build --release
+        cd /opt/opendata
+        cargo build --release -p opendata-log-c
       args:
         executable: /bin/bash
 
-    # Build opendata-java Maven artifacts
-    - name: Build and install opendata-java
+    # Build opendata-java with Gradle and install to local Maven repo
+    - name: Build opendata-java
       shell: |
-        export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto
-        export PATH=/opt/maven/bin:$PATH
+        export JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto
         cd /opt/opendata-java
-        mvn clean install -DskipTests
+        ./gradlew build -x test
+      args:
+        executable: /bin/bash
+
+    - name: Install opendata-java common jar to local Maven repo
+      shell: |
+        export JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto
+        export PATH=/opt/maven/bin:$PATH
+        mvn install:install-file \
+          -Dfile=/opt/opendata-java/common/build/libs/common-0.1.0-SNAPSHOT.jar \
+          -DgroupId=dev.opendata -DartifactId=common \
+          -Dversion=0.1.0-SNAPSHOT -Dpackaging=jar
+      args:
+        executable: /bin/bash
+
+    - name: Install opendata-java log jar to local Maven repo
+      shell: |
+        export JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto
+        export PATH=/opt/maven/bin:$PATH
+        mvn install:install-file \
+          -Dfile=/opt/opendata-java/log/build/libs/log-0.1.0-SNAPSHOT.jar \
+          -DgroupId=dev.opendata -DartifactId=log \
+          -Dversion=0.1.0-SNAPSHOT -Dpackaging=jar
       args:
         executable: /bin/bash
 
     # Build benchmark
     - name: Build benchmark
       shell: |
-        export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto
+        export JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto
         export PATH=/opt/maven/bin:$PATH
         cd /opt/benchmark-src
         mvn clean install -pl driver-opendata,package -am -DskipTests -Dcheckstyle.skip=true -Dspotless.check.skip=true -Dlicense.skip=true -Dspotbugs.skip=true
@@ -174,7 +204,7 @@
     # Set up native library path
     - name: Create ld.so.conf.d entry for native library
       copy:
-        content: "/opt/opendata-java/log/native/target/release"
+        content: "/opt/opendata/target/release"
         dest: /etc/ld.so.conf.d/opendata.conf
 
     - name: Update ldconfig
@@ -186,10 +216,10 @@
         path: /opt/benchmark/workers.yaml
         state: absent
 
-    # Set JVM_OPTS for native library path
+    # Set JVM_OPTS for native library path and FFM native access
     - name: Configure JVM_OPTS for native library
       copy:
-        content: 'export JVM_OPTS="-Djava.library.path=/opt/opendata-java/log/native/target/release"'
+        content: 'export JVM_OPTS="-Djava.library.path=/opt/opendata/target/release --enable-native-access=ALL-UNNAMED"'
         dest: /etc/profile.d/opendata-jvm.sh
         mode: '0644'
 

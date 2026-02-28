@@ -10,26 +10,38 @@ The driver maps OMB concepts to OpenData Log operations:
 |-------------|--------------------------------------------|
 | Topic       | Log key prefix                             |
 | Partition   | Key suffix (`{topic}/0`, `{topic}/1`, ...) |
-| Producer    | `Log.append()` with partition routing      |
-| Consumer    | `LogReader` with polling                   |
+| Producer    | `Log.tryAppend()` with partition routing    |
+| Consumer    | `LogRead.scanRaw()` with polling            |
 
 ## Prerequisites
 
-1. Build and install the [opendata-java](https://github.com/opendata-oss/opendata-java) library:
+1. Build the native C library (from the [opendata](https://github.com/opendata-oss/opendata) workspace):
+
+```bash
+cd opendata
+cargo build --release -p opendata-log-c
+```
+
+2. Build and install the [opendata-java](https://github.com/opendata-oss/opendata-java) library to your local Maven repo:
 
 ```bash
 cd opendata-java
-cd log/native && cargo build --release && cd ../..
-mvn clean install
+./gradlew build -x test
+mvn install:install-file -Dfile=common/build/libs/common-0.1.0-SNAPSHOT.jar \
+  -DgroupId=dev.opendata -DartifactId=common -Dversion=0.1.0-SNAPSHOT -Dpackaging=jar
+mvn install:install-file -Dfile=log/build/libs/log-0.1.0-SNAPSHOT.jar \
+  -DgroupId=dev.opendata -DartifactId=log -Dversion=0.1.0-SNAPSHOT -Dpackaging=jar
 ```
 
-2. Ensure the native library is in your library path:
+3. Ensure the native library is in your library path:
 
 ```bash
-export LD_LIBRARY_PATH=/path/to/opendata-java/log/native/target/release:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/path/to/opendata/target/release:$LD_LIBRARY_PATH
 # or on macOS:
-export DYLD_LIBRARY_PATH=/path/to/opendata-java/log/native/target/release:$DYLD_LIBRARY_PATH
+export DYLD_LIBRARY_PATH=/path/to/opendata/target/release:$DYLD_LIBRARY_PATH
 ```
+
+4. **Java 24+** is required (for Panama FFM native access).
 
 ## Configuration
 
@@ -117,14 +129,14 @@ bin/benchmark \
 ## Limitations
 
 - **Polling-based consumption**: True push-based consumption awaits upstream API
-- **JNI overhead**: See opendata-java documentation for performance characteristics
+- **FFM overhead**: See opendata-java documentation for performance characteristics
 - **Single Log instance**: All topics share one Log (keys provide isolation)
 
 ## Troubleshooting
 
-### `UnsatisfiedLinkError: no opendata_log_jni in java.library.path`
+### `UnsatisfiedLinkError: no opendata_log_c in java.library.path`
 
-The native library is not in your library path. Set `LD_LIBRARY_PATH` (Linux) or `DYLD_LIBRARY_PATH` (macOS) to include the directory containing `libopendata_log_jni.so` or `libopendata_log_jni.dylib`.
+The native library is not in your library path. Set `LD_LIBRARY_PATH` (Linux) or `DYLD_LIBRARY_PATH` (macOS) to include the directory containing `libopendata_log_c.so` or `libopendata_log_c.dylib`.
 
 ### Slow S3 writes
 
