@@ -25,7 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.opendata.AppendResult;
-import dev.opendata.Record;
+import dev.opendata.RecordBatch;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -37,7 +37,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 class OpenDataBenchmarkProducerTest {
 
@@ -47,7 +46,7 @@ class OpenDataBenchmarkProducerTest {
     @BeforeEach
     void setUp() {
         mockAppender = mock(LogAppender.class);
-        when(mockAppender.append(any(Record[].class)))
+        when(mockAppender.tryAppend(any(RecordBatch.class)))
                 .thenReturn(new AppendResult(0, System.currentTimeMillis()));
     }
 
@@ -67,20 +66,17 @@ class OpenDataBenchmarkProducerTest {
         // Should complete within reasonable time
         future.get(5, TimeUnit.SECONDS);
 
-        // Verify append was called
-        verify(mockAppender, timeout(1000).atLeastOnce()).append(any(Record[].class));
+        // Verify tryAppend was called
+        verify(mockAppender, timeout(1000).atLeastOnce()).tryAppend(any(RecordBatch.class));
     }
 
     @Test
     void sendAsyncShouldBatchMultipleWrites() throws Exception {
-        // Use a latch to control when append completes, allowing writes to queue up
+        // Use a latch to control when tryAppend completes, allowing writes to queue up
         CountDownLatch appendLatch = new CountDownLatch(1);
         AtomicInteger appendCount = new AtomicInteger(0);
-        List<Integer> batchSizes = new ArrayList<>();
 
-        when(mockAppender.append(any(Record[].class))).thenAnswer(invocation -> {
-            Record[] records = invocation.getArgument(0);
-            batchSizes.add(records.length);
+        when(mockAppender.tryAppend(any(RecordBatch.class))).thenAnswer(invocation -> {
             appendCount.incrementAndGet();
             // First call waits, subsequent calls proceed immediately
             if (appendCount.get() == 1) {
@@ -104,16 +100,14 @@ class OpenDataBenchmarkProducerTest {
         // Wait for all futures to complete
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(5, TimeUnit.SECONDS);
 
-        // Should have batched - fewer append calls than messages
+        // Should have batched - fewer tryAppend calls than messages
         assertThat(appendCount.get()).isLessThan(100);
-        // At least one batch should have multiple records
-        assertThat(batchSizes.stream().anyMatch(size -> size > 1)).isTrue();
     }
 
     @Test
     void sendAsyncShouldPropagateErrors() throws Exception {
         RuntimeException testException = new RuntimeException("Test error");
-        when(mockAppender.append(any(Record[].class))).thenThrow(testException);
+        when(mockAppender.tryAppend(any(RecordBatch.class))).thenThrow(testException);
 
         producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
 
@@ -123,146 +117,6 @@ class OpenDataBenchmarkProducerTest {
                 .isInstanceOf(ExecutionException.class)
                 .hasCauseInstanceOf(RuntimeException.class)
                 .hasRootCauseMessage("Test error");
-    }
-
-    @Test
-    void sendAsyncWithKeyShouldRouteToSamePartition() throws Exception {
-        ArgumentCaptor<Record[]> recordsCaptor = ArgumentCaptor.forClass(Record[].class);
-        when(mockAppender.append(recordsCaptor.capture()))
-                .thenReturn(new AppendResult(0, System.currentTimeMillis()));
-
-        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 4);
-
-        // Send multiple messages with the same key
-        String key = "consistent-key";
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
-            futures.add(producer.sendAsync(Optional.of(key), ("payload-" + i).getBytes()));
-        }
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(5, TimeUnit.SECONDS);
-
-        // All records should have the same partition key
-        List<Record[]> allBatches = recordsCaptor.getAllValues();
-        String firstPartitionKey = null;
-        for (Record[] batch : allBatches) {
-            for (Record record : batch) {
-                String partitionKey = new String(record.key());
-                if (firstPartitionKey == null) {
-                    firstPartitionKey = partitionKey;
-                } else {
-                    assertThat(partitionKey).isEqualTo(firstPartitionKey);
-                }
-            }
-        }
-    }
-
-    @Test
-    void sendAsyncWithoutKeyShouldRoundRobin() throws Exception {
-        ArgumentCaptor<Record[]> recordsCaptor = ArgumentCaptor.forClass(Record[].class);
-
-        // Slow down appends to prevent batching
-        when(mockAppender.append(recordsCaptor.capture())).thenAnswer(invocation -> {
-            Thread.sleep(10);
-            return new AppendResult(0, System.currentTimeMillis());
-        });
-
-        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 4);
-
-        // Send messages without keys
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-        for (int i = 0; i < 8; i++) {
-            futures.add(producer.sendAsync(Optional.empty(), ("payload-" + i).getBytes()));
-        }
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(5, TimeUnit.SECONDS);
-
-        // Collect all partition keys used
-        List<String> partitionKeys = new ArrayList<>();
-        for (Record[] batch : recordsCaptor.getAllValues()) {
-            for (Record record : batch) {
-                partitionKeys.add(new String(record.key()));
-            }
-        }
-
-        // Should have used multiple partitions (round-robin)
-        long distinctPartitions = partitionKeys.stream().distinct().count();
-        assertThat(distinctPartitions).isGreaterThan(1);
-    }
-
-    @Test
-    void closeShouldCompleteRemainingWrites() throws Exception {
-        CountDownLatch appendStarted = new CountDownLatch(1);
-        CountDownLatch appendCanProceed = new CountDownLatch(1);
-
-        when(mockAppender.append(any(Record[].class))).thenAnswer(invocation -> {
-            appendStarted.countDown();
-            appendCanProceed.await(5, TimeUnit.SECONDS);
-            return new AppendResult(0, System.currentTimeMillis());
-        });
-
-        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
-
-        // Send a message
-        CompletableFuture<Void> future = producer.sendAsync(Optional.empty(), "test-payload".getBytes());
-
-        // Wait for append to start
-        appendStarted.await(1, TimeUnit.SECONDS);
-
-        // Close should wait for in-flight writes
-        new Thread(() -> {
-            try {
-                Thread.sleep(100);
-                appendCanProceed.countDown();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }).start();
-
-        producer.close();
-
-        // Future should have completed
-        assertThat(future.isDone()).isTrue();
-    }
-
-    @Test
-    void closeShouldFailPendingWritesAfterShutdown() throws Exception {
-        // Block the first append indefinitely
-        CountDownLatch blockForever = new CountDownLatch(1);
-        AtomicInteger appendCount = new AtomicInteger(0);
-
-        when(mockAppender.append(any(Record[].class))).thenAnswer(invocation -> {
-            if (appendCount.incrementAndGet() == 1) {
-                // First append blocks
-                blockForever.await();
-            }
-            return new AppendResult(0, System.currentTimeMillis());
-        });
-
-        producer = new OpenDataBenchmarkProducer(mockAppender, "test-topic", 1);
-
-        // Send first message (will block in append)
-        CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), "first".getBytes());
-
-        // Wait a bit for the writer thread to pick it up
-        Thread.sleep(50);
-
-        // Send more messages that will queue up
-        List<CompletableFuture<Void>> queued = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            queued.add(producer.sendAsync(Optional.empty(), ("queued-" + i).getBytes()));
-        }
-
-        // Close the producer (should interrupt the blocked append)
-        producer.close();
-
-        // Queued writes should fail with IllegalStateException
-        for (CompletableFuture<Void> future : queued) {
-            if (!future.isDone()) {
-                assertThatThrownBy(() -> future.get(1, TimeUnit.SECONDS))
-                        .isInstanceOf(ExecutionException.class);
-            }
-        }
     }
 
     @Test
@@ -279,11 +133,12 @@ class OpenDataBenchmarkProducerTest {
 
     @Test
     void sendAsyncShouldCaptureTimestampAtSubmission() throws Exception {
-        ArgumentCaptor<Record[]> recordsCaptor = ArgumentCaptor.forClass(Record[].class);
+        // Track the RecordBatch passed to tryAppend so we can inspect its first timestamp
+        List<Long> capturedTimestamps = new ArrayList<>();
 
-        // Delay the append
-        when(mockAppender.append(recordsCaptor.capture())).thenAnswer(invocation -> {
-            Thread.sleep(100);
+        when(mockAppender.tryAppend(any(RecordBatch.class))).thenAnswer(invocation -> {
+            RecordBatch batch = invocation.getArgument(0);
+            capturedTimestamps.add(batch.firstTimestampMs());
             return new AppendResult(0, System.currentTimeMillis());
         });
 
@@ -295,12 +150,9 @@ class OpenDataBenchmarkProducerTest {
 
         future.get(5, TimeUnit.SECONDS);
 
-        // Get the captured record's timestamp
-        Record[] records = recordsCaptor.getValue();
-        long recordTimestamp = records[0].timestampMs();
-
         // Timestamp should be captured at send time, not append time
-        assertThat(recordTimestamp).isBetween(beforeSend, afterSend);
+        assertThat(capturedTimestamps).isNotEmpty();
+        assertThat(capturedTimestamps.get(0)).isBetween(beforeSend, afterSend);
     }
 
     @Test

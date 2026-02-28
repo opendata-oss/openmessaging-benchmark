@@ -13,8 +13,9 @@
  */
 package io.openmessaging.benchmark.driver.opendata;
 
-import dev.opendata.LogEntry;
+import dev.opendata.LogEntryView;
 import dev.opendata.LogRead;
+import dev.opendata.LogScanRawIterator;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.Closeable;
@@ -56,10 +57,18 @@ public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
     private static final long DEFAULT_REFRESH_INTERVAL_MS = 10;
     private static final int DEFAULT_QUEUE_CAPACITY = 10_000;
 
+    /**
+     * Extracted payload from a zero-copy LogEntryView, safe to enqueue across threads.
+     *
+     * @param value     the message payload
+     * @param timestamp epoch millis when the message was appended
+     */
+    private record ReceivedMessage(byte[] value, long timestamp) {}
+
     private final LogRead reader;
     private final Closeable ownedResource;  // non-null if we own the reader and must close it
     private final ConsumerCallback callback;
-    private final BlockingQueue<LogEntry> entryQueue;
+    private final BlockingQueue<ReceivedMessage> entryQueue;
     private final ExecutorService pollerExecutor;
     private final ExecutorService dispatcherExecutor;
     private final List<PartitionPoller> pollers;
@@ -134,9 +143,9 @@ public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
     private void dispatchLoop() {
         while (running.get() || !entryQueue.isEmpty()) {
             try {
-                LogEntry entry = entryQueue.poll(refreshIntervalMs, TimeUnit.MILLISECONDS);
-                if (entry != null) {
-                    callback.messageReceived(entry.value(), entry.timestamp());
+                ReceivedMessage msg = entryQueue.poll(refreshIntervalMs, TimeUnit.MILLISECONDS);
+                if (msg != null) {
+                    callback.messageReceived(msg.value(), msg.timestamp());
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -178,13 +187,18 @@ public class OpenDataBenchmarkConsumer implements BenchmarkConsumer {
         public void run() {
             while (running.get()) {
                 long cycleStart = System.nanoTime();
-                try {
-                    List<LogEntry> entries = reader.scan(partitionKey, currentSequence, pollBatchSize);
-
-                    for (LogEntry entry : entries) {
-                        // Block if queue is full (backpressure)
-                        entryQueue.put(entry);
+                try (LogScanRawIterator iter = reader.scanRaw(partitionKey, currentSequence)) {
+                    int count = 0;
+                    LogEntryView entry;
+                    while (count < pollBatchSize && (entry = iter.next()) != null) {
+                        // Extract value before next() invalidates the view
+                        byte[] value = entry.value().toArray();
+                        long timestamp = entry.timestamp();
                         currentSequence = entry.sequence() + 1;
+                        count++;
+
+                        // Block if queue is full (backpressure)
+                        entryQueue.put(new ReceivedMessage(value, timestamp));
                     }
 
                     // Sleep for remaining time in refresh interval

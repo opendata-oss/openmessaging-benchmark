@@ -14,7 +14,8 @@
 package io.openmessaging.benchmark.driver.opendata;
 
 import dev.opendata.LogDb;
-import dev.opendata.Record;
+import dev.opendata.RecordBatch;
+import dev.opendata.common.QueueFullException;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -26,13 +27,14 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * OMB producer implementation backed by Log.append().
+ * OMB producer implementation backed by Log.tryAppend().
  *
  * <p>Uses a batching writer pattern for efficiency and backpressure:
  * <ul>
  *   <li>Writes are queued with their timestamps (captured at sendAsync time)</li>
- *   <li>A background thread drains the queue and batches writes</li>
+ *   <li>A background thread drains the queue and builds RecordBatches in native memory</li>
  *   <li>Bounded queue provides natural backpressure</li>
+ *   <li>QueueFullException from the native layer triggers retry with backoff</li>
  * </ul>
  *
  * <p>Maps OMB's key distribution model to Log partition-keys:
@@ -50,6 +52,12 @@ public class OpenDataBenchmarkProducer implements BenchmarkProducer {
     /** Queue capacity - provides backpressure when full. */
     private static final int QUEUE_CAPACITY = 10_000;
 
+    /** Initial backoff on QueueFullException, doubles each retry. */
+    private static final long RETRY_BACKOFF_MS = 1;
+
+    /** Maximum backoff between retries. */
+    private static final long MAX_RETRY_BACKOFF_MS = 100;
+
     private final LogAppender appender;
     private final byte[][] partitionKeys;
     private final int numPartitions;
@@ -66,11 +74,15 @@ public class OpenDataBenchmarkProducer implements BenchmarkProducer {
      * A pending write waiting to be batched and sent to the Log.
      */
     private static final class PendingWrite implements QueueItem {
-        final Record record;
+        final byte[] key;
+        final byte[] value;
+        final long timestampMs;
         final CompletableFuture<Void> future;
 
-        PendingWrite(Record record) {
-            this.record = record;
+        PendingWrite(byte[] key, byte[] value, long timestampMs) {
+            this.key = key;
+            this.value = value;
+            this.timestampMs = timestampMs;
             this.future = new CompletableFuture<>();
         }
     }
@@ -133,8 +145,8 @@ public class OpenDataBenchmarkProducer implements BenchmarkProducer {
         }
 
         byte[] partitionKey = selectPartitionKey(optionalKey);
-        Record record = new Record(partitionKey, payload);
-        PendingWrite pending = new PendingWrite(record);
+        long timestampMs = System.currentTimeMillis();
+        PendingWrite pending = new PendingWrite(partitionKey, payload, timestampMs);
 
         try {
             writeQueue.put(pending); // blocks if queue is full = backpressure
@@ -270,7 +282,8 @@ public class OpenDataBenchmarkProducer implements BenchmarkProducer {
     }
 
     /**
-     * Writes a batch of records to the Log and completes their futures.
+     * Builds a RecordBatch from pending writes, appends with retry on QueueFullException,
+     * and completes futures.
      *
      * @param batch the batch of pending writes to process
      */
@@ -279,14 +292,27 @@ public class OpenDataBenchmarkProducer implements BenchmarkProducer {
             return;
         }
 
-        int size = batch.size();
-        Record[] records = new Record[size];
-        for (int i = 0; i < size; i++) {
-            records[i] = batch.get(i).record;
-        }
+        try (RecordBatch recordBatch = RecordBatch.create()) {
+            for (PendingWrite pw : batch) {
+                recordBatch.add(pw.key, pw.value, pw.timestampMs);
+            }
 
-        try {
-            appender.append(records);
+            // Retry with exponential backoff on QueueFullException
+            long backoffMs = RETRY_BACKOFF_MS;
+            while (true) {
+                try {
+                    appender.tryAppend(recordBatch);
+                    break;
+                } catch (QueueFullException e) {
+                    try {
+                        Thread.sleep(backoffMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw e; // give up on interrupt
+                    }
+                    backoffMs = Math.min(backoffMs * 2, MAX_RETRY_BACKOFF_MS);
+                }
+            }
 
             // Complete all futures
             for (PendingWrite pw : batch) {
@@ -296,7 +322,7 @@ public class OpenDataBenchmarkProducer implements BenchmarkProducer {
             for (PendingWrite pw : batch) {
                 pw.future.completeExceptionally(e);
             }
-            throw e;
+            throw e instanceof RuntimeException re ? re : new RuntimeException(e);
         }
     }
 

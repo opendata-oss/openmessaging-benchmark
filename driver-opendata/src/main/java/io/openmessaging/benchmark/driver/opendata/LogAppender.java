@@ -15,7 +15,7 @@ package io.openmessaging.benchmark.driver.opendata;
 
 import dev.opendata.AppendResult;
 import dev.opendata.LogDb;
-import dev.opendata.Record;
+import dev.opendata.RecordBatch;
 
 /**
  * Interface for appending records to a Log.
@@ -27,10 +27,12 @@ public interface LogAppender {
     /**
      * Appends a batch of records to the log.
      *
-     * @param records the records to append
+     * <p>The batch is not closed by this method — the caller retains ownership.
+     *
+     * @param batch the record batch to append
      * @return the result of the append operation
      */
-    AppendResult append(Record[] records);
+    AppendResult tryAppend(RecordBatch batch);
 
     /**
      * Flushes buffered data to durable storage.
@@ -50,8 +52,8 @@ public interface LogAppender {
     static LogAppender wrap(LogDb log) {
         return new LogAppender() {
             @Override
-            public AppendResult append(Record[] records) {
-                return log.append(records);
+            public AppendResult tryAppend(RecordBatch batch) {
+                return log.tryAppend(batch);
             }
 
             @Override
