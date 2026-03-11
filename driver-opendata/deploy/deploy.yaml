@@ -216,6 +216,12 @@
         remote_src: yes
         extra_opts: ["--strip-components=1"]
 
+    # Copy SlateDB settings
+    - name: Copy SlateDB settings to benchmark directory
+      copy:
+        src: slatedb-settings.toml
+        dest: /opt/benchmark/slatedb-settings.toml
+
     # Set up native library path
     - name: Create ld.so.conf.d entry for native library
       copy:
