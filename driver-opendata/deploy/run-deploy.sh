@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Combined script to generate inventory and run Ansible deployment
-#
 
 set -e
 

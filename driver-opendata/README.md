@@ -10,8 +10,8 @@ The driver maps OMB concepts to OpenData Log operations:
 |-------------|--------------------------------------------|
 | Topic       | Log key prefix                             |
 | Partition   | Key suffix (`{topic}/0`, `{topic}/1`, ...) |
-| Producer    | `Log.tryAppend()` with partition routing    |
-| Consumer    | `LogRead.scanRaw()` with polling            |
+| Producer    | `Log.tryAppend()` with partition routing   |
+| Consumer    | `LogRead.scanRaw()` with polling           |
 
 ## Prerequisites
 
@@ -85,12 +85,12 @@ consumer:
 
 ### Consumer Options
 
-|       Option        | Default |                              Description                              |
-|---------------------|---------|-----------------------------------------------------------------------|
-| `separateReader`    | `true`  | Use separate LogDbReader for realistic e2e latency measurement        |
-| `refreshIntervalMs` | `10`    | Interval (ms) for polling/refreshing for new data                     |
-| `pollBatchSize`     | `1000`  | Maximum entries to read per poll                                      |
-| `queueCapacity`     | `10000` | Internal queue size for backpressure                                  |
+|       Option        | Default |                          Description                           |
+|---------------------|---------|----------------------------------------------------------------|
+| `separateReader`    | `true`  | Use separate LogDbReader for realistic e2e latency measurement |
+| `refreshIntervalMs` | `10`    | Interval (ms) for polling/refreshing for new data              |
+| `pollBatchSize`     | `1000`  | Maximum entries to read per poll                               |
+| `queueCapacity`     | `10000` | Internal queue size for backpressure                           |
 
 **`separateReader`**: When `true`, consumers use an independent `LogDbReader` that accesses storage directly, simulating a separate process. This provides realistic end-to-end latency measurements. When `false`, consumers share the producer's `LogDb` instance (faster but less realistic for latency benchmarks).
 
