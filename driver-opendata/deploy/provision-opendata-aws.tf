@@ -246,6 +246,11 @@ variable "reader_refresh_interval_ms" {
   default     = 10
 }
 
+variable "read_visibility" {
+  description = "Read visibility for the log: MEMORY (visible after memory write) or REMOTE (visible after remote persistence)"
+  default     = "MEMORY"
+}
+
 # Instance profile
 resource "aws_iam_instance_profile" "benchmark_profile" {
   name = "opendata-benchmark-profile-${random_id.hash.hex}"
@@ -320,4 +325,8 @@ output "separate_reader" {
 
 output "reader_refresh_interval_ms" {
   value = var.reader_refresh_interval_ms
+}
+
+output "read_visibility" {
+  value = var.read_visibility
 }

@@ -115,6 +115,14 @@ public class OpenDataConfig {
          */
         @JsonProperty("settingsPath")
         public String settingsPath;
+
+        /**
+         * Read visibility for the log: "MEMORY" or "REMOTE".
+         * MEMORY: reads are visible as soon as they are written to memory (default).
+         * REMOTE: reads are only visible after they are persisted to remote storage.
+         */
+        @JsonProperty("readVisibility")
+        public String readVisibility = "MEMORY";
     }
 
     /**

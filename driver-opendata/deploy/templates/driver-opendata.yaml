@@ -21,6 +21,7 @@ storage:
   objectStore: s3
   s3Bucket: {{ s3_bucket }}
   s3Region: {{ region }}
+  readVisibility: {{ read_visibility | default('MEMORY') }}
 
 consumer:
   separateReader: {{ separate_reader | lower }}
