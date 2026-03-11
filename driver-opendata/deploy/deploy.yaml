@@ -17,7 +17,7 @@
   connection: ssh
   become: true
   vars:
-    java_version: "24"
+    java_version: "25"
     rust_version: "stable"
     opendata_repo: "https://github.com/opendata-oss/opendata.git"
     opendata_java_repo: "https://github.com/opendata-oss/opendata-java.git"
@@ -52,17 +52,32 @@
         state: present
       when: ansible_facts['os_family'] == "RedHat"
 
-    # Java 24 installation
-    - name: Install Amazon Corretto 24
+    # Java installation via Eclipse Temurin (Adoptium)
+    - name: Add Adoptium GPG key
+      rpm_key:
+        key: https://packages.adoptium.net/artifactory/api/gpg/key/public
+        state: present
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Add Adoptium yum repo
+      yum_repository:
+        name: Adoptium
+        description: Eclipse Temurin packages from Adoptium
+        baseurl: https://packages.adoptium.net/artifactory/rpm/rhel/9/$basearch
+        gpgcheck: yes
+        gpgkey: https://packages.adoptium.net/artifactory/api/gpg/key/public
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Install Temurin {{ java_version }}
       yum:
-        name: java-24-amazon-corretto-devel
+        name: "temurin-{{ java_version }}-jdk"
         state: present
       when: ansible_facts['os_family'] == "RedHat"
 
     - name: Set JAVA_HOME
       lineinfile:
         path: /etc/environment
-        line: 'JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto'
+        line: 'JAVA_HOME=/usr/lib/jvm/temurin-{{ java_version }}-jdk'
         create: yes
 
     # Maven installation
@@ -151,7 +166,7 @@
     # Build opendata-java with Gradle and install to local Maven repo
     - name: Build opendata-java
       shell: |
-        export JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto
+        export JAVA_HOME=/usr/lib/jvm/temurin-{{ java_version }}-jdk
         cd /opt/opendata-java
         ./gradlew build -x test
       args:
@@ -159,7 +174,7 @@
 
     - name: Install opendata-java common jar to local Maven repo
       shell: |
-        export JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto
+        export JAVA_HOME=/usr/lib/jvm/temurin-{{ java_version }}-jdk
         export PATH=/opt/maven/bin:$PATH
         mvn install:install-file \
           -Dfile=/opt/opendata-java/common/build/libs/common-0.1.0-SNAPSHOT.jar \
@@ -170,7 +185,7 @@
 
     - name: Install opendata-java log jar to local Maven repo
       shell: |
-        export JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto
+        export JAVA_HOME=/usr/lib/jvm/temurin-{{ java_version }}-jdk
         export PATH=/opt/maven/bin:$PATH
         mvn install:install-file \
           -Dfile=/opt/opendata-java/log/build/libs/log-0.1.0-SNAPSHOT.jar \
@@ -182,7 +197,7 @@
     # Build benchmark
     - name: Build benchmark
       shell: |
-        export JAVA_HOME=/usr/lib/jvm/java-24-amazon-corretto
+        export JAVA_HOME=/usr/lib/jvm/temurin-{{ java_version }}-jdk
         export PATH=/opt/maven/bin:$PATH
         cd /opt/benchmark-src
         mvn clean install -pl driver-opendata,package -am -DskipTests -Dcheckstyle.skip=true -Dspotless.check.skip=true -Dlicense.skip=true -Dspotbugs.skip=true

@@ -268,6 +268,11 @@ resource "aws_instance" "client" {
   associate_public_ip_address = var.associate_public_ip
   count                       = var.num_instances
 
+  root_block_device {
+    volume_size = 32
+    volume_type = "gp3"
+  }
+
   tags = {
     Name      = "opendata_client_${count.index}"
     Benchmark = "OpenData"

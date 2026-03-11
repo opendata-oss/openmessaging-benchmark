@@ -19,6 +19,7 @@ import dev.opendata.LogDbReader;
 import dev.opendata.LogDbReaderConfig;
 import dev.opendata.LogRead;
 import dev.opendata.ReadVisibility;
+import dev.opendata.SegmentConfig;
 import dev.opendata.common.ObjectStoreConfig;
 import dev.opendata.common.StorageConfig;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
@@ -59,7 +60,7 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
 
         StorageConfig storageConfig = buildStorageConfig(config.storage);
         ReadVisibility readVisibility = ReadVisibility.valueOf(config.storage.readVisibility);
-        LogDbConfig logDbConfig = new LogDbConfig(storageConfig, null, readVisibility);
+        LogDbConfig logDbConfig = new LogDbConfig(storageConfig, SegmentConfig.DEFAULT, readVisibility);
         this.log = LogDb.open(logDbConfig);
     }
 
