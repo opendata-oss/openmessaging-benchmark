@@ -16,3 +16,7 @@ s3_bucket = "your-bucket-name"
 # Consumer configuration
 # separate_reader            = true  # true = realistic e2e latency, false = shared instance
 # reader_refresh_interval_ms = 10    # Interval (ms) for polling/refreshing for new data
+
+# Compaction configuration
+# compaction_mode                = "DEFAULT"  # DEFAULT or L0_ONLY
+# separate_compaction_runtime    = true       # Run compaction on a dedicated runtime

@@ -23,6 +23,8 @@ storage:
   s3Region: {{ region }}
   readVisibility: {{ read_visibility | default('MEMORY') }}
   settingsPath: slatedb-settings.toml
+  compactionMode: {{ compaction_mode | default('DEFAULT') }}
+  separateCompactionRuntime: {{ separate_compaction_runtime | default(true) | lower }}
 
 consumer:
   separateReader: {{ separate_reader | lower }}

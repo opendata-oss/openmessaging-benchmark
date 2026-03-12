@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.opendata;
 
+import dev.opendata.CompactionMode;
 import dev.opendata.LogDb;
 import dev.opendata.LogDbConfig;
 import dev.opendata.LogDbReader;
@@ -60,7 +61,10 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
 
         StorageConfig storageConfig = buildStorageConfig(config.storage);
         ReadVisibility readVisibility = ReadVisibility.valueOf(config.storage.readVisibility);
-        LogDbConfig logDbConfig = new LogDbConfig(storageConfig, SegmentConfig.DEFAULT, readVisibility);
+        CompactionMode compactionMode = CompactionMode.valueOf(config.storage.compactionMode);
+        LogDbConfig logDbConfig = new LogDbConfig(
+                storageConfig, SegmentConfig.DEFAULT, readVisibility,
+                compactionMode, config.storage.separateCompactionRuntime);
         this.log = LogDb.open(logDbConfig);
     }
 

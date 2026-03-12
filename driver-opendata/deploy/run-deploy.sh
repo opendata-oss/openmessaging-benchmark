@@ -31,6 +31,8 @@ OPENDATA_JAVA_BRANCH=$(terraform output -raw opendata_java_branch)
 BENCHMARK_BRANCH=$(terraform output -raw benchmark_branch)
 SEPARATE_READER=$(terraform output -raw separate_reader)
 READ_VISIBILITY=$(terraform output -raw read_visibility)
+COMPACTION_MODE=$(terraform output -raw compaction_mode)
+SEPARATE_COMPACTION_RUNTIME=$(terraform output -raw separate_compaction_runtime)
 
 echo "    s3_bucket:            $S3_BUCKET"
 echo "    region:               $REGION"
@@ -39,6 +41,8 @@ echo "    opendata_java_branch: $OPENDATA_JAVA_BRANCH"
 echo "    benchmark_branch:     $BENCHMARK_BRANCH"
 echo "    separate_reader:      $SEPARATE_READER"
 echo "    read_visibility:      $READ_VISIBILITY"
+echo "    compaction_mode:      $COMPACTION_MODE"
+echo "    separate_compaction:  $SEPARATE_COMPACTION_RUNTIME"
 
 echo ""
 echo "==> Running Ansible playbook..."
@@ -50,4 +54,6 @@ ansible-playbook deploy.yaml \
   -e "benchmark_branch=$BENCHMARK_BRANCH" \
   -e "separate_reader=$SEPARATE_READER" \
   -e "read_visibility=$READ_VISIBILITY" \
+  -e "compaction_mode=$COMPACTION_MODE" \
+  -e "separate_compaction_runtime=$SEPARATE_COMPACTION_RUNTIME" \
   "$@"

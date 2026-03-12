@@ -251,6 +251,16 @@ variable "read_visibility" {
   default     = "MEMORY"
 }
 
+variable "compaction_mode" {
+  description = "Compaction mode: DEFAULT (full compaction) or L0_ONLY (only compact L0 SSTs)"
+  default     = "DEFAULT"
+}
+
+variable "separate_compaction_runtime" {
+  description = "When true, compaction runs on a dedicated runtime"
+  default     = true
+}
+
 # Instance profile
 resource "aws_iam_instance_profile" "benchmark_profile" {
   name = "opendata-benchmark-profile-${random_id.hash.hex}"
@@ -334,4 +344,12 @@ output "reader_refresh_interval_ms" {
 
 output "read_visibility" {
   value = var.read_visibility
+}
+
+output "compaction_mode" {
+  value = var.compaction_mode
+}
+
+output "separate_compaction_runtime" {
+  value = var.separate_compaction_runtime
 }

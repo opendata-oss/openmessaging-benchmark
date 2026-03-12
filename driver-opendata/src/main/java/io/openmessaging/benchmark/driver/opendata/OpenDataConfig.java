@@ -123,6 +123,20 @@ public class OpenDataConfig {
          */
         @JsonProperty("readVisibility")
         public String readVisibility = "MEMORY";
+
+        /**
+         * Compaction mode: "DEFAULT" or "L0_ONLY".
+         * DEFAULT: uses SlateDB's built-in compaction scheduler.
+         * L0_ONLY: only compacts L0 SSTs, never merges sorted runs.
+         */
+        @JsonProperty("compactionMode")
+        public String compactionMode = "DEFAULT";
+
+        /**
+         * When true, compaction runs on a dedicated runtime.
+         */
+        @JsonProperty("separateCompactionRuntime")
+        public boolean separateCompactionRuntime = true;
     }
 
     /**
