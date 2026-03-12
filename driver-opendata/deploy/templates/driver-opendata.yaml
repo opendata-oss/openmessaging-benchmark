@@ -22,6 +22,7 @@ storage:
   s3Bucket: {{ s3_bucket }}
   s3Region: {{ region }}
   readVisibility: {{ read_visibility | default('MEMORY') }}
+  settingsPath: slatedb-settings.toml
 
 consumer:
   separateReader: {{ separate_reader | lower }}
