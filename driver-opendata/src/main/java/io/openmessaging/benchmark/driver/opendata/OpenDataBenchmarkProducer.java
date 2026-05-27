@@ -39,6 +39,18 @@ public class OpenDataBenchmarkProducer implements BenchmarkProducer {
     /** Matches Kafka producer's {@code max.block.ms} default. */
     private static final long APPEND_TIMEOUT_MS = 60_000;
 
+    /** Process-wide instrumentation. Sufficient because the bench runs a single producer. */
+    private static final AtomicLong APPEND_CALLS = new AtomicLong();
+    private static final AtomicLong APPEND_NANOS = new AtomicLong();
+
+    public static long getAppendCalls() {
+        return APPEND_CALLS.get();
+    }
+
+    public static long getAppendNanos() {
+        return APPEND_NANOS.get();
+    }
+
     private final LogDb log;
     private final byte[][] partitionKeys;
     private final int numPartitions;
@@ -65,10 +77,14 @@ public class OpenDataBenchmarkProducer implements BenchmarkProducer {
         Record record = new Record(partitionKey, payload, System.currentTimeMillis());
 
         AppendResult result;
+        long t0 = System.nanoTime();
         try {
             result = log.appendTimeout(new Record[]{record}, APPEND_TIMEOUT_MS);
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
+        } finally {
+            APPEND_NANOS.addAndGet(System.nanoTime() - t0);
+            APPEND_CALLS.incrementAndGet();
         }
 
         CompletableFuture<Void> ombFuture = new CompletableFuture<>();

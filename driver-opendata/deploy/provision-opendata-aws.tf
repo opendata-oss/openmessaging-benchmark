@@ -256,6 +256,11 @@ variable "telemetry_enabled" {
   default     = false
 }
 
+variable "telemetry_log_filter" {
+  description = "EnvFilter directive for the native tracing subscriber (e.g. 'slatedb=debug'). Empty = no subscriber installed."
+  default     = ""
+}
+
 # Instance profile
 resource "aws_iam_instance_profile" "benchmark_profile" {
   name = "opendata-benchmark-profile-${random_id.hash.hex}"
@@ -339,6 +344,10 @@ output "reader_refresh_interval_ms" {
 
 output "telemetry_enabled" {
   value = var.telemetry_enabled
+}
+
+output "telemetry_log_filter" {
+  value = var.telemetry_log_filter
 }
 
 output "read_visibility" {

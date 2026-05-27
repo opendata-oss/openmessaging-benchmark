@@ -33,3 +33,4 @@ consumer:
 telemetry:
   enabled: {{ telemetry_enabled | default(false) | lower }}
   printIntervalMs: 5000
+  logFilter: "{{ telemetry_log_filter | default('') }}"

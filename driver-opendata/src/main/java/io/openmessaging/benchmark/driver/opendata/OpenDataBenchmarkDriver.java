@@ -79,6 +79,11 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
     private OpenDataConfig config;
     private ScheduledExecutorService telemetryExecutor;
 
+    // Last-tick snapshot for delta computation in the print loop.
+    private long lastAppendCalls;
+    private long lastAppendNanos;
+    private long lastTickNanos;
+
     /** Tracks partition count per topic for producer/consumer creation. */
     private final Map<String, Integer> topicPartitions = new ConcurrentHashMap<>();
 
@@ -91,7 +96,7 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
         // a NoopRecorder if none is set when the first describe!/counter! macro fires. Once
         // that happens, set_global_recorder can't replace it and Telemetry.renderMetrics
         // returns empty forever.
-        if (config.telemetry.logFilter != null) {
+        if (config.telemetry.logFilter != null && !config.telemetry.logFilter.isEmpty()) {
             Logging.enable(config.telemetry.logFilter);
         }
         if (config.telemetry.enabled) {
@@ -206,6 +211,7 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
     }
 
     private void startTelemetryLoop(long intervalMs) {
+        lastTickNanos = System.nanoTime();
         telemetryExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "opendata-telemetry");
             t.setDaemon(true);
@@ -227,6 +233,24 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
                 line.append(' ').append(shortName(metric)).append('=')
                         .append(extractMetric(text, metric));
             }
+
+            // Append driver-side write-path instrumentation (delta since last tick).
+            long now = System.nanoTime();
+            long calls = OpenDataBenchmarkProducer.getAppendCalls();
+            long nanos = OpenDataBenchmarkProducer.getAppendNanos();
+            long deltaCalls = calls - lastAppendCalls;
+            long deltaNanos = nanos - lastAppendNanos;
+            long deltaTimeNanos = now - lastTickNanos;
+            lastAppendCalls = calls;
+            lastAppendNanos = nanos;
+            lastTickNanos = now;
+
+            if (deltaTimeNanos > 0) {
+                double rate = deltaCalls * 1_000_000_000.0 / deltaTimeNanos;
+                long avgUs = deltaCalls > 0 ? (deltaNanos / deltaCalls) / 1_000 : 0;
+                line.append(String.format(" append_rate=%.0f/s append_avg_us=%d", rate, avgUs));
+            }
+
             log.info(line.toString());
         } catch (Throwable t) {
             // Never let a telemetry tick kill the executor.
