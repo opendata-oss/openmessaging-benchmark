@@ -86,20 +86,23 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         this.config = OpenDataConfig.load(configurationFile);
 
-        // Tracing subscriber must be installed before any LogDb open emits logs.
+        // Both subscribers must be installed before LogDb.open: SlateDB registers metrics
+        // through the metrics-rs facade during DB construction, and metrics-rs auto-installs
+        // a NoopRecorder if none is set when the first describe!/counter! macro fires. Once
+        // that happens, set_global_recorder can't replace it and Telemetry.renderMetrics
+        // returns empty forever.
         if (config.telemetry.logFilter != null) {
             Logging.enable(config.telemetry.logFilter);
+        }
+        if (config.telemetry.enabled) {
+            Telemetry.init();
+            startTelemetryLoop(config.telemetry.printIntervalMs);
         }
 
         StorageConfig storageConfig = buildStorageConfig(config.storage);
         ReadVisibility readVisibility = ReadVisibility.valueOf(config.storage.readVisibility);
         LogDbConfig logDbConfig = new LogDbConfig(storageConfig, SegmentConfig.DEFAULT, readVisibility);
         this.logDb = LogDb.open(logDbConfig);
-
-        if (config.telemetry.enabled) {
-            Telemetry.init();
-            startTelemetryLoop(config.telemetry.printIntervalMs);
-        }
 
         log.info("OpenData driver initialized; telemetry.enabled={}, telemetry.logFilter={}, telemetry.printIntervalMs={}",
                 config.telemetry.enabled,
