@@ -3,3 +3,4 @@
 # See https://slatedb.io/docs/operations/tuning/ for available options.
 
 wal_enabled = false
+l0_max_ssts = 16
