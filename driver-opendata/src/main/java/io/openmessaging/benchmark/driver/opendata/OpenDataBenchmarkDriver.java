@@ -100,6 +100,11 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
             Telemetry.init();
             startTelemetryLoop(config.telemetry.printIntervalMs);
         }
+
+        log.info("OpenData driver initialized; telemetry.enabled={}, telemetry.logFilter={}, telemetry.printIntervalMs={}",
+                config.telemetry.enabled,
+                config.telemetry.logFilter,
+                config.telemetry.printIntervalMs);
     }
 
     private StorageConfig buildStorageConfig(OpenDataConfig.StorageConfig storage) {
@@ -211,6 +216,7 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
         try {
             String text = Telemetry.renderMetrics();
             if (text.isEmpty()) {
+                log.warn("[telemetry] renderMetrics returned empty — foreign metrics recorder?");
                 return;
             }
             StringBuilder line = new StringBuilder("[telemetry]");
