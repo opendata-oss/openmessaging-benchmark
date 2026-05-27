@@ -18,6 +18,7 @@ import static java.util.stream.Collectors.toList;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.bookkeeper.stats.StatsLogger;
 
@@ -118,6 +119,35 @@ public interface BenchmarkDriver extends AutoCloseable {
                         .collect(toList());
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .thenApply(v -> futures.stream().map(CompletableFuture::join).collect(toList()));
+    }
+
+    /**
+     * Ensure topics are ready to send and receive messages before the benchmark starts.
+     *
+     * <p>The default implementation publishes a small probe message per producer and flushes.
+     * This is required for brokers (e.g. Kafka, Pulsar) where consumer partition assignment is
+     * triggered by the first publish on a topic.
+     *
+     * <p>Drivers whose topics are immediately ready after {@link #createTopic} should override
+     * this to return {@link CompletableFuture#completedFuture(Object) completedFuture(null)}.
+     *
+     * @param producers the producers created for this workload
+     * @return a future that completes once topics are ready
+     */
+    default CompletableFuture<Void> ensureTopicsAreReady(List<BenchmarkProducer> producers) {
+        CompletableFuture<Void>[] sends =
+                producers.stream()
+                        .map(p -> p.sendAsync(Optional.of("key"), new byte[10]))
+                        .toArray(CompletableFuture[]::new);
+        return CompletableFuture.allOf(sends)
+                .thenCompose(
+                        v -> {
+                            CompletableFuture<Void>[] flushes =
+                                    producers.stream()
+                                            .map(BenchmarkProducer::flush)
+                                            .toArray(CompletableFuture[]::new);
+                            return CompletableFuture.allOf(flushes);
+                        });
     }
 
     record TopicInfo(String topic, int partitions) {

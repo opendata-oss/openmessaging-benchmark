@@ -28,6 +28,7 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -104,6 +105,15 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
         int partitions = topicPartitions.getOrDefault(topic, 1);
         BenchmarkProducer producer = new OpenDataBenchmarkProducer(log, topic, partitions);
         return CompletableFuture.completedFuture(producer);
+    }
+
+    @Override
+    public CompletableFuture<Void> ensureTopicsAreReady(List<BenchmarkProducer> producers) {
+        // LogDb keys are created on first append and LogDbReader sees writes as soon as the
+        // underlying SlateDB makes them visible — no broker-side priming needed. Skipping the
+        // default probe also avoids stalling on durability when WAL is disabled, since a single
+        // probe message wouldn't fill the L0 threshold.
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
