@@ -251,6 +251,11 @@ variable "read_visibility" {
   default     = "MEMORY"
 }
 
+variable "telemetry_enabled" {
+  description = "Enable the driver's SlateDB metrics print loop (5s cadence)"
+  default     = false
+}
+
 # Instance profile
 resource "aws_iam_instance_profile" "benchmark_profile" {
   name = "opendata-benchmark-profile-${random_id.hash.hex}"
@@ -330,6 +335,10 @@ output "separate_reader" {
 
 output "reader_refresh_interval_ms" {
   value = var.reader_refresh_interval_ms
+}
+
+output "telemetry_enabled" {
+  value = var.telemetry_enabled
 }
 
 output "read_visibility" {

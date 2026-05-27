@@ -29,3 +29,7 @@ consumer:
   refreshIntervalMs: {{ reader_refresh_interval_ms | default(10) }}
   pollBatchSize: 1000
   queueCapacity: 10000
+
+telemetry:
+  enabled: {{ telemetry_enabled | default(false) | lower }}
+  printIntervalMs: 5000

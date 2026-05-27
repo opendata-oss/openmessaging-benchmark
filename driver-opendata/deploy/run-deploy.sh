@@ -32,6 +32,7 @@ BENCHMARK_BRANCH=$(terraform output -raw benchmark_branch)
 SEPARATE_READER=$(terraform output -raw separate_reader)
 READ_VISIBILITY=$(terraform output -raw read_visibility)
 READER_REFRESH_INTERVAL_MS=$(terraform output -raw reader_refresh_interval_ms)
+TELEMETRY_ENABLED=$(terraform output -raw telemetry_enabled)
 
 echo "    s3_bucket:                  $S3_BUCKET"
 echo "    region:                     $REGION"
@@ -41,6 +42,7 @@ echo "    benchmark_branch:           $BENCHMARK_BRANCH"
 echo "    separate_reader:            $SEPARATE_READER"
 echo "    read_visibility:            $READ_VISIBILITY"
 echo "    reader_refresh_interval_ms: $READER_REFRESH_INTERVAL_MS"
+echo "    telemetry_enabled:          $TELEMETRY_ENABLED"
 
 echo ""
 echo "==> Running Ansible playbook..."
@@ -53,4 +55,5 @@ ansible-playbook deploy.yaml \
   -e "separate_reader=$SEPARATE_READER" \
   -e "read_visibility=$READ_VISIBILITY" \
   -e "reader_refresh_interval_ms=$READER_REFRESH_INTERVAL_MS" \
+  -e "telemetry_enabled=$TELEMETRY_ENABLED" \
   "$@"

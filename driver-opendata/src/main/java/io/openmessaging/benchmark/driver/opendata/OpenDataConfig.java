@@ -61,6 +61,9 @@ public class OpenDataConfig {
     /** Consumer configuration. */
     public ConsumerConfig consumer = new ConsumerConfig();
 
+    /** Telemetry configuration. */
+    public TelemetryConfig telemetry = new TelemetryConfig();
+
     /**
      * Loads configuration from a YAML file.
      *
@@ -175,5 +178,28 @@ public class OpenDataConfig {
          */
         @JsonProperty("queueCapacity")
         public int queueCapacity = 10_000;
+    }
+
+    /**
+     * Telemetry configuration. When enabled, the driver installs the native
+     * Prometheus recorder and periodically logs selected SlateDB metrics for
+     * diagnosing write-stall / L0 backpressure during a benchmark run.
+     */
+    public static class TelemetryConfig {
+        /** Whether to install the recorder and run the print loop. Default: false. */
+        public boolean enabled = false;
+
+        /** Interval between metric prints in ms. Default: 5000. */
+        @JsonProperty("printIntervalMs")
+        public long printIntervalMs = 5_000;
+
+        /**
+         * Optional EnvFilter directive for the native tracing subscriber
+         * (e.g. "slatedb=info"). If non-null, the driver calls
+         * {@code Logging.enable(filter)} before opening the LogDb. Null = do
+         * not install any subscriber.
+         */
+        @JsonProperty("logFilter")
+        public String logFilter;
     }
 }

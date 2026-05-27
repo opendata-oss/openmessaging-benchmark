@@ -18,8 +18,10 @@ import dev.opendata.LogDbConfig;
 import dev.opendata.LogDbReader;
 import dev.opendata.LogDbReaderConfig;
 import dev.opendata.LogRead;
+import dev.opendata.Logging;
 import dev.opendata.ReadVisibility;
 import dev.opendata.SegmentConfig;
+import dev.opendata.Telemetry;
 import dev.opendata.common.ObjectStoreConfig;
 import dev.opendata.common.StorageConfig;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
@@ -32,8 +34,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.bookkeeper.stats.StatsLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * OpenMessaging Benchmark driver for OpenData Log.
@@ -49,8 +58,26 @@ import org.apache.bookkeeper.stats.StatsLogger;
  */
 public class OpenDataBenchmarkDriver implements BenchmarkDriver {
 
-    private LogDb log;
+    private static final Logger log = LoggerFactory.getLogger(OpenDataBenchmarkDriver.class);
+
+    /**
+     * SlateDB metrics surfaced by the telemetry print loop. Order is preserved
+     * in the log line. The native tracing subscriber rewrites dotted metric
+     * names (e.g. {@code slatedb.db.l0_sst_count}) to underscores via
+     * metrics-exporter-prometheus.
+     */
+    private static final String[] TELEMETRY_METRICS = {
+            "slatedb_db_l0_sst_count",
+            "slatedb_db_segment_max_l0_sst_count",
+            "slatedb_db_backpressure_count",
+            "slatedb_db_total_mem_size_bytes",
+            "slatedb_db_immutable_memtable_flushes",
+            "slatedb_db_l0_flush_bytes",
+    };
+
+    private LogDb logDb;
     private OpenDataConfig config;
+    private ScheduledExecutorService telemetryExecutor;
 
     /** Tracks partition count per topic for producer/consumer creation. */
     private final Map<String, Integer> topicPartitions = new ConcurrentHashMap<>();
@@ -59,10 +86,20 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         this.config = OpenDataConfig.load(configurationFile);
 
+        // Tracing subscriber must be installed before any LogDb open emits logs.
+        if (config.telemetry.logFilter != null) {
+            Logging.enable(config.telemetry.logFilter);
+        }
+
         StorageConfig storageConfig = buildStorageConfig(config.storage);
         ReadVisibility readVisibility = ReadVisibility.valueOf(config.storage.readVisibility);
         LogDbConfig logDbConfig = new LogDbConfig(storageConfig, SegmentConfig.DEFAULT, readVisibility);
-        this.log = LogDb.open(logDbConfig);
+        this.logDb = LogDb.open(logDbConfig);
+
+        if (config.telemetry.enabled) {
+            Telemetry.init();
+            startTelemetryLoop(config.telemetry.printIntervalMs);
+        }
     }
 
     private StorageConfig buildStorageConfig(OpenDataConfig.StorageConfig storage) {
@@ -103,7 +140,7 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
         int partitions = topicPartitions.getOrDefault(topic, 1);
-        BenchmarkProducer producer = new OpenDataBenchmarkProducer(log, topic, partitions);
+        BenchmarkProducer producer = new OpenDataBenchmarkProducer(logDb, topic, partitions);
         return CompletableFuture.completedFuture(producer);
     }
 
@@ -135,7 +172,7 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
             reader = ownedReader;
         } else {
             // Share the producer's LogDb instance
-            reader = log;
+            reader = logDb;
         }
 
         // Consumer reads from all partitions for this topic
@@ -151,8 +188,53 @@ public class OpenDataBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void close() throws Exception {
-        if (log != null) {
-            log.close();
+        if (telemetryExecutor != null) {
+            telemetryExecutor.shutdownNow();
+            telemetryExecutor.awaitTermination(2, TimeUnit.SECONDS);
         }
+        if (logDb != null) {
+            logDb.close();
+        }
+    }
+
+    private void startTelemetryLoop(long intervalMs) {
+        telemetryExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "opendata-telemetry");
+            t.setDaemon(true);
+            return t;
+        });
+        telemetryExecutor.scheduleAtFixedRate(
+                this::printTelemetrySnapshot, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void printTelemetrySnapshot() {
+        try {
+            String text = Telemetry.renderMetrics();
+            if (text.isEmpty()) {
+                return;
+            }
+            StringBuilder line = new StringBuilder("[telemetry]");
+            for (String metric : TELEMETRY_METRICS) {
+                line.append(' ').append(shortName(metric)).append('=')
+                        .append(extractMetric(text, metric));
+            }
+            log.info(line.toString());
+        } catch (Throwable t) {
+            // Never let a telemetry tick kill the executor.
+            log.warn("telemetry snapshot failed", t);
+        }
+    }
+
+    /** Strips the {@code slatedb_db_} prefix for terser log lines. */
+    private static String shortName(String metric) {
+        return metric.startsWith("slatedb_db_") ? metric.substring("slatedb_db_".length()) : metric;
+    }
+
+    private static String extractMetric(String text, String metricName) {
+        Pattern p = Pattern.compile(
+                "^" + Pattern.quote(metricName) + "(?:\\{[^}]*\\})?\\s+(\\S+)\\s*$",
+                Pattern.MULTILINE);
+        Matcher m = p.matcher(text);
+        return m.find() ? m.group(1) : "-";
     }
 }
