@@ -31,14 +31,16 @@ OPENDATA_JAVA_BRANCH=$(terraform output -raw opendata_java_branch)
 BENCHMARK_BRANCH=$(terraform output -raw benchmark_branch)
 SEPARATE_READER=$(terraform output -raw separate_reader)
 READ_VISIBILITY=$(terraform output -raw read_visibility)
+READER_REFRESH_INTERVAL_MS=$(terraform output -raw reader_refresh_interval_ms)
 
-echo "    s3_bucket:            $S3_BUCKET"
-echo "    region:               $REGION"
-echo "    opendata_branch:      $OPENDATA_BRANCH"
-echo "    opendata_java_branch: $OPENDATA_JAVA_BRANCH"
-echo "    benchmark_branch:     $BENCHMARK_BRANCH"
-echo "    separate_reader:      $SEPARATE_READER"
-echo "    read_visibility:      $READ_VISIBILITY"
+echo "    s3_bucket:                  $S3_BUCKET"
+echo "    region:                     $REGION"
+echo "    opendata_branch:            $OPENDATA_BRANCH"
+echo "    opendata_java_branch:       $OPENDATA_JAVA_BRANCH"
+echo "    benchmark_branch:           $BENCHMARK_BRANCH"
+echo "    separate_reader:            $SEPARATE_READER"
+echo "    read_visibility:            $READ_VISIBILITY"
+echo "    reader_refresh_interval_ms: $READER_REFRESH_INTERVAL_MS"
 
 echo ""
 echo "==> Running Ansible playbook..."
@@ -50,4 +52,5 @@ ansible-playbook deploy.yaml \
   -e "benchmark_branch=$BENCHMARK_BRANCH" \
   -e "separate_reader=$SEPARATE_READER" \
   -e "read_visibility=$READ_VISIBILITY" \
+  -e "reader_refresh_interval_ms=$READER_REFRESH_INTERVAL_MS" \
   "$@"
