@@ -13,149 +13,73 @@
  */
 package io.openmessaging.benchmark.driver.opendata;
 
+import dev.opendata.AppendResult;
 import dev.opendata.LogDb;
-import dev.opendata.RecordBatch;
-import dev.opendata.common.QueueFullException;
+import dev.opendata.Record;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * OMB producer implementation backed by Log.tryAppend().
+ * OMB producer backed by {@link LogDb#appendTimeout(Record[], long)}.
  *
- * <p>Uses a batching writer pattern for efficiency and backpressure:
- * <ul>
- *   <li>Writes are queued with their timestamps (captured at sendAsync time)</li>
- *   <li>A background thread drains the queue and builds RecordBatches in native memory</li>
- *   <li>Bounded queue provides natural backpressure</li>
- *   <li>QueueFullException from the native layer triggers retry with backoff</li>
- * </ul>
+ * <p>Each {@code sendAsync} appends a single record and chains the returned OMB
+ * future to {@link AppendResult#durable()} so completion signals durability,
+ * matching Kafka's {@code acks=all} semantics.
  *
- * <p>Maps OMB's key distribution model to Log partition-keys:
- * <ul>
- *   <li>Producer manages N partition-keys: "{topic}/0", "{topic}/1", ..., "{topic}/N-1"</li>
- *   <li>OMB message keys are hashed to select a partition-key</li>
- *   <li>NO_KEY messages are round-robined across partitions</li>
- * </ul>
+ * <p>OMB message keys map to log partition-keys named
+ * {@code "{topic}/{partitionIndex}"}; when {@code numPartitions == 1} the topic
+ * name is used directly. Keyed messages hash to a deterministic partition;
+ * keyless messages round-robin.
  */
 public class OpenDataBenchmarkProducer implements BenchmarkProducer {
 
-    /** Maximum records per batch. */
-    private static final int MAX_BATCH_SIZE = 1000;
+    /** Matches Kafka producer's {@code max.block.ms} default. */
+    private static final long APPEND_TIMEOUT_MS = 60_000;
 
-    /** Queue capacity - provides backpressure when full. */
-    private static final int QUEUE_CAPACITY = 10_000;
-
-    /** Initial backoff on QueueFullException, doubles each retry. */
-    private static final long RETRY_BACKOFF_MS = 1;
-
-    /** Maximum backoff between retries. */
-    private static final long MAX_RETRY_BACKOFF_MS = 100;
-
-    private final LogAppender appender;
+    private final LogDb log;
     private final byte[][] partitionKeys;
     private final int numPartitions;
     private final AtomicLong roundRobinCounter = new AtomicLong(0);
-
-    private final BlockingQueue<QueueItem> writeQueue;
-    private final Thread writerThread;
     private volatile boolean closed = false;
 
-    /** Sealed interface for type-safe queue operations. */
-    private sealed interface QueueItem permits PendingWrite, FlushRequest {}
-
-    /**
-     * A pending write waiting to be batched and sent to the Log.
-     */
-    private static final class PendingWrite implements QueueItem {
-        final byte[] key;
-        final byte[] value;
-        final long timestampMs;
-        final CompletableFuture<Void> future;
-
-        PendingWrite(byte[] key, byte[] value, long timestampMs) {
-            this.key = key;
-            this.value = value;
-            this.timestampMs = timestampMs;
-            this.future = new CompletableFuture<>();
-        }
-    }
-
-    /** A request to flush buffered data to durable storage. */
-    private static final class FlushRequest implements QueueItem {
-        final CompletableFuture<Void> future = new CompletableFuture<>();
-    }
-
-    /**
-     * Creates a producer for a single partition.
-     *
-     * @param log   the LogDb instance
-     * @param topic the topic name (used as the Log key)
-     */
-    public OpenDataBenchmarkProducer(LogDb log, String topic) {
-        this(LogAppender.wrap(log), topic, 1);
-    }
-
-    /**
-     * Creates a producer with multiple partitions.
-     *
-     * @param log           the LogDb instance
-     * @param topic         the topic name (prefix for partition-keys)
-     * @param numPartitions number of partitions to distribute messages across
-     */
     public OpenDataBenchmarkProducer(LogDb log, String topic, int numPartitions) {
-        this(LogAppender.wrap(log), topic, numPartitions);
-    }
-
-    /**
-     * Creates a producer with a LogAppender (for testing).
-     *
-     * @param appender      the LogAppender to use
-     * @param topic         the topic name (prefix for partition-keys)
-     * @param numPartitions number of partitions to distribute messages across
-     */
-    OpenDataBenchmarkProducer(LogAppender appender, String topic, int numPartitions) {
-        this.appender = appender;
+        this.log = log;
         this.numPartitions = numPartitions;
         this.partitionKeys = new byte[numPartitions][];
-
         for (int i = 0; i < numPartitions; i++) {
             String partitionKey = numPartitions == 1 ? topic : topic + "/" + i;
             this.partitionKeys[i] = partitionKey.getBytes(StandardCharsets.UTF_8);
         }
-
-        this.writeQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
-        this.writerThread = new Thread(this::writerLoop, "opendata-producer-writer");
-        this.writerThread.setDaemon(true);
-        this.writerThread.start();
     }
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> optionalKey, byte[] payload) {
         if (closed) {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            future.completeExceptionally(new IllegalStateException("Producer is closed"));
-            return future;
+            return CompletableFuture.failedFuture(new IllegalStateException("Producer is closed"));
         }
 
         byte[] partitionKey = selectPartitionKey(optionalKey);
-        long timestampMs = System.currentTimeMillis();
-        PendingWrite pending = new PendingWrite(partitionKey, payload, timestampMs);
+        Record record = new Record(partitionKey, payload, System.currentTimeMillis());
 
+        AppendResult result;
         try {
-            writeQueue.put(pending); // blocks if queue is full = backpressure
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            pending.future.completeExceptionally(e);
+            result = log.appendTimeout(new Record[]{record}, APPEND_TIMEOUT_MS);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
         }
 
-        return pending.future;
+        CompletableFuture<Void> ombFuture = new CompletableFuture<>();
+        result.durable().whenComplete((unused, ex) -> {
+            if (ex != null) {
+                ombFuture.completeExceptionally(ex);
+            } else {
+                ombFuture.complete(null);
+            }
+        });
+        return ombFuture;
     }
 
     @Override
@@ -163,193 +87,29 @@ public class OpenDataBenchmarkProducer implements BenchmarkProducer {
         if (closed) {
             return CompletableFuture.completedFuture(null);
         }
-
-        FlushRequest request = new FlushRequest();
         try {
-            writeQueue.put(request);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            request.future.completeExceptionally(e);
+            log.flush();
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
         }
-        return request.future;
     }
 
     @Override
-    public void close() throws Exception {
-        if (!closed) {
-            closed = true;
-
-            // Interrupt writer thread and wait for it to finish
-            writerThread.interrupt();
-            try {
-                writerThread.join(5000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-
-            // Fail any remaining queued writes
-            QueueItem item;
-            while ((item = writeQueue.poll()) != null) {
-                if (item instanceof PendingWrite pending) {
-                    pending.future.completeExceptionally(
-                            new IllegalStateException("Producer closed before write completed"));
-                } else if (item instanceof FlushRequest flushReq) {
-                    flushReq.future.completeExceptionally(
-                            new IllegalStateException("Producer closed before flush completed"));
-                }
-            }
-        }
-        // Note: Producer doesn't own the Log, so we don't close it
+    public void close() {
+        closed = true;
     }
 
-    /**
-     * Background writer loop that batches and flushes writes.
-     *
-     * <p>No linger time - we grab whatever is available and write immediately.
-     * SlateDB handles batching/buffering internally.
-     */
-    private void writerLoop() {
-        List<PendingWrite> batch = new ArrayList<>(MAX_BATCH_SIZE);
-
-        while (!closed) {
-            try {
-                // Block until at least one item is available
-                QueueItem first = writeQueue.take();
-
-                if (first instanceof FlushRequest flushReq) {
-                    // Write any accumulated batch first
-                    if (!batch.isEmpty()) {
-                        writeBatch(batch);
-                        batch.clear();
-                    }
-                    // Then flush to storage
-                    try {
-                        appender.flush();
-                        flushReq.future.complete(null);
-                    } catch (Exception e) {
-                        flushReq.future.completeExceptionally(e);
-                    }
-                    continue;
-                }
-
-                // Normal write path
-                batch.add((PendingWrite) first);
-
-                // Drain more items, stopping at flush requests
-                QueueItem item;
-                while (batch.size() < MAX_BATCH_SIZE && (item = writeQueue.poll()) != null) {
-                    if (item instanceof FlushRequest) {
-                        writeQueue.put(item); // Put back for next iteration
-                        break;
-                    }
-                    batch.add((PendingWrite) item);
-                }
-
-                // Write the batch immediately
-                writeBatch(batch);
-
-            } catch (InterruptedException e) {
-                // Shutdown requested
-                Thread.currentThread().interrupt();
-                break;
-            } catch (Exception e) {
-                // Fail all futures in the batch
-                for (PendingWrite pw : batch) {
-                    pw.future.completeExceptionally(e);
-                }
-            } finally {
-                batch.clear();
-            }
-        }
-
-        // Drain remaining items on shutdown
-        List<QueueItem> remaining = new ArrayList<>();
-        writeQueue.drainTo(remaining);
-        for (QueueItem item : remaining) {
-            if (item instanceof PendingWrite pw) {
-                batch.add(pw);
-            }
-        }
-        if (!batch.isEmpty()) {
-            try {
-                writeBatch(batch);
-            } catch (Exception e) {
-                for (PendingWrite pw : batch) {
-                    pw.future.completeExceptionally(e);
-                }
-            }
-        }
-    }
-
-    /**
-     * Builds a RecordBatch from pending writes, appends with retry on QueueFullException,
-     * and completes futures.
-     *
-     * @param batch the batch of pending writes to process
-     */
-    private void writeBatch(List<PendingWrite> batch) {
-        if (batch.isEmpty()) {
-            return;
-        }
-
-        try (RecordBatch recordBatch = RecordBatch.create()) {
-            for (PendingWrite pw : batch) {
-                recordBatch.add(pw.key, pw.value, pw.timestampMs);
-            }
-
-            // Retry with exponential backoff on QueueFullException
-            long backoffMs = RETRY_BACKOFF_MS;
-            while (true) {
-                try {
-                    appender.tryAppend(recordBatch);
-                    break;
-                } catch (QueueFullException e) {
-                    try {
-                        Thread.sleep(backoffMs);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw e; // give up on interrupt
-                    }
-                    backoffMs = Math.min(backoffMs * 2, MAX_RETRY_BACKOFF_MS);
-                }
-            }
-
-            // Complete all futures
-            for (PendingWrite pw : batch) {
-                pw.future.complete(null);
-            }
-        } catch (Exception e) {
-            for (PendingWrite pw : batch) {
-                pw.future.completeExceptionally(e);
-            }
-            throw e instanceof RuntimeException re ? re : new RuntimeException(e);
-        }
-    }
-
-    /**
-     * Selects the partition-key based on the OMB message key.
-     *
-     * <p>If a key is provided, it's hashed to deterministically select a partition
-     * (same key always routes to same partition for ordering guarantees).
-     * If no key, round-robin across partitions.
-     *
-     * @param optionalKey the optional message key for partition selection
-     * @return the partition key bytes
-     */
     private byte[] selectPartitionKey(Optional<String> optionalKey) {
         if (numPartitions == 1) {
             return partitionKeys[0];
         }
-
         int partitionIndex;
         if (optionalKey.isPresent()) {
-            // Hash the key to select partition (deterministic routing)
             partitionIndex = Math.abs(optionalKey.get().hashCode()) % numPartitions;
         } else {
-            // Round-robin for NO_KEY
             partitionIndex = (int) (roundRobinCounter.getAndIncrement() % numPartitions);
         }
-
         return partitionKeys[partitionIndex];
     }
 }

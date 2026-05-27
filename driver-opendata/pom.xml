@@ -76,7 +76,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+                    <!--
+                      Native log-c lives in the sibling opendata Cargo workspace.
+                      Mirrors the path used by opendata-java's gradle test config.
+                    -->
+                    <argLine>--enable-native-access=ALL-UNNAMED -Djava.library.path=${project.basedir}/../../opendata/target/release${path.separator}${project.basedir}/../../opendata/target/debug</argLine>
                 </configuration>
             </plugin>
         </plugins>
